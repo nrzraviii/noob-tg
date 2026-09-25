@@ -5,7 +5,10 @@ import re
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlencode
+from io import BytesIO
+
+import qrcode
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -18,6 +21,8 @@ from telegram import (
     BotCommandScopeDefault,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
 )
 from telegram.ext import (
     Application,
@@ -44,8 +49,8 @@ OWNER_IDS = [
 
 # These are defaults. You can change them from Admin -> Settings.
 DEFAULT_CONFIG = {
-    "upi_id": os.getenv("UPI_ID", "s.ta.r.x.sharma@fam"),
-    "upi_name": os.getenv("UPI_NAME", "MANISH SHARMA"),
+    "upi_id": os.getenv("UPI_ID", "sandeepshoww@oksbi"),
+    "upi_name": os.getenv("UPI_NAME", "nrzravi"),
     "admin_contact": os.getenv("ADMIN_CONTACT", "@nrzravi"),
     "payment_qr_file_id": os.getenv("PAYMENT_QR_FILE_ID", ""),
     "how_to_pay_url": os.getenv("HOW_TO_PAY_URL", ""),
@@ -139,6 +144,11 @@ def load_db():
 
 
 db = load_db()
+# Upgrade legacy payment defaults from the earlier sample account.
+if db.get("config", {}).get("upi_id") == "s.ta.r.x.sharma@fam":
+    db["config"]["upi_id"] = "sandeepshoww@oksbi"
+if db.get("config", {}).get("upi_name") == "MANISH SHARMA":
+    db["config"]["upi_name"] = "nrzravi"
 
 
 def save_db():
@@ -184,26 +194,28 @@ def valid_utr(text):
     return bool(re.fullmatch(r"[A-Za-z0-9_-]{6,40}", text))
 
 
-def main_kb(user_id):
-    rows = [
-        [InlineKeyboardButton("🛒 Buy Autolike", callback_data="menu_buy_auto"),
-         InlineKeyboardButton("📁 My Autolikes", callback_data="menu_my_auto")],
-        [InlineKeyboardButton("🎟 Redeem Code", callback_data="menu_redeem"),
-         InlineKeyboardButton("💰 Buy Coins", callback_data="menu_buy_coins")],
-        [InlineKeyboardButton("💳 My Balance", callback_data="menu_balance"),
-         InlineKeyboardButton("👥 Earn Coins", callback_data="menu_earn")],
-        [InlineKeyboardButton("❓ Help & Support", callback_data="menu_help")],
-    ]
-    if is_owner(user_id):
-        rows.append([InlineKeyboardButton("🔐 Admin Panel", callback_data="admin_panel")])
-    return InlineKeyboardMarkup(rows)
+def main_kb(user_id=None):
+    # Main user menu is a Telegram reply keyboard, so it stays at the bottom
+    # of the chat just like the original shop-bot screenshot. Admin controls
+    # are intentionally NOT included here.
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton("🛒 Buy Autolike"), KeyboardButton("📁 My Autolikes")],
+            [KeyboardButton("🎟 Redeem Code"), KeyboardButton("💰 Buy Coins")],
+            [KeyboardButton("💳 My Balance"), KeyboardButton("👥 Earn Coins")],
+            [KeyboardButton("❓ Help & Support")],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+        input_field_placeholder="Choose an option…",
+    )
 
 
 def back_menu_kb():
     return InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="menu_back")]])
 
 
-def cancel_kb(callback="menu_back"):
+def cancel_kb(callback="cancel_flow"):
     return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data=callback)]])
 
 
@@ -249,17 +261,40 @@ def payment_packages_kb():
     ] + [[InlineKeyboardButton("❌ Cancel", callback_data="menu_back")]])
 
 
+def payment_uri(amount):
+    cfg = db["config"]
+    # Standard UPI deep-link. The amount is fixed to the selected package.
+    return "upi://pay?" + urlencode({
+        "pa": cfg.get("upi_id", "sandeepshoww@oksbi"),
+        "pn": cfg.get("upi_name", "nrzravi"),
+        "am": f"{float(amount):.2f}",
+        "cu": "INR",
+    })
+
+
+def make_payment_qr(amount):
+    qr = qrcode.QRCode(version=None, box_size=9, border=4)
+    qr.add_data(payment_uri(amount))
+    qr.make(fit=True)
+    img = qr.make_image()
+    bio = BytesIO()
+    bio.name = "upi_payment_qr.png"
+    img.save(bio, format="PNG")
+    bio.seek(0)
+    return bio
+
+
 def payment_text(amount, coin_amount):
     cfg = db["config"]
-    upi = cfg.get("upi_id", "")
-    name = cfg.get("upi_name", "")
+    upi = cfg.get("upi_id", "sandeepshoww@oksbi")
+    name = cfg.get("upi_name", "nrzravi")
     return (
         "🇮🇳 <b>UPI Payment</b>\n\n"
         f"Coins: <b>{fmt_coins(coin_amount)}</b>\n"
         f"Amount: <b>₹{amount}</b>\n\n"
         f"📲 UPI ID: <code>{upi}</code>\n"
-        f"👤 Name: {name}\n\n"
-        "⚠️ Pay the exact amount and click <b>I Have Paid</b> to upload your payment screenshot."
+        f"👤 Name: <b>{name}</b>\n\n"
+        "⚠️ Pay the exact amount using the QR above or UPI ID and click <b>I Have Paid</b>."
     )
 
 
@@ -330,9 +365,9 @@ async def safe_delete(bot, chat_id, message_id):
 
 async def edit_or_reply(query, text, markup=None):
     try:
-        await query.edit_message_text(text, reply_markup=markup)
+        await query.edit_message_text(text, reply_markup=markup, parse_mode="HTML")
     except Exception:
-        await query.message.reply_text(text, reply_markup=markup)
+        await query.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
 
 
 async def send_admins(context, text, markup=None, photo=None):
@@ -378,17 +413,88 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await notify_user(context, referrer_id,
                               f"👥 <b>Referral Earned</b>\n\nYou earned <b>{fmt_coins(reward)} coins</b> from a new referral.")
     save_db()
-    text = (
-        f"👋 <b>Welcome, {update.effective_user.first_name}!</b>\n\n"
-        "🛍 <b>FF Autolikes Shop Bot</b>\n\n"
-        "Choose an option below:"
-    )
-    await update.message.reply_text(text, reply_markup=main_kb(update.effective_user.id), parse_mode="HTML")
+    await send_welcome_message(update.message, update.effective_user.id)
 
 
 # =============================================================================
 # User flows
 # =============================================================================
+
+MENU_TEXT_TO_CALLBACK = {
+    "🛒 Buy Autolike": "menu_buy_auto",
+    "📁 My Autolikes": "menu_my_auto",
+    "🎟 Redeem Code": "menu_redeem",
+    "💰 Buy Coins": "menu_buy_coins",
+    "💳 My Balance": "menu_balance",
+    "👥 Earn Coins": "menu_earn",
+    "❓ Help & Support": "menu_help",
+}
+
+
+async def send_welcome_message(message, user_id):
+    text = (
+        f"👋 <b>Welcome, {message.from_user.first_name}!</b>\n\n"
+        "🛍 <b>FF Autolikes Shop Bot</b>\n\n"
+        "Choose an option below:"
+    )
+    await message.reply_text(text, reply_markup=main_kb(user_id), parse_mode="HTML")
+
+
+async def finish_payment_wait_message(context, order, text, markup=None):
+    chat_id = order.get("verification_chat_id")
+    message_id = order.get("verification_message_id")
+    if not chat_id or not message_id:
+        return
+    try:
+        await context.bot.edit_message_text(
+            chat_id=chat_id, message_id=message_id, text=text,
+            reply_markup=markup, parse_mode="HTML"
+        )
+    except Exception as e:
+        print("Payment status message edit error:", e)
+
+
+VERIFY_MESSAGES = [
+    ("⏳ <b>Auto-verifying payment details...</b>", 5),
+    ("🔄 <b>Processing payment verification...</b>", 5),
+    ("🔎 <b>Verification in process...</b>", 3),
+    ("⏱️ <b>Checking transaction details...</b>", 8),
+    ("⌛ <b>It may take up to 10 minutes...</b>", 5),
+    ("🔐 <b>Securely checking UTR and payment...</b>", 8),
+    ("📡 <b>Waiting for payment confirmation...</b>", 5),
+    ("🧾 <b>Cross-checking transaction record...</b>", 8),
+]
+
+
+async def payment_verification_loop(context, order_id):
+    """Keep the payment message in a changing verification state for 10 minutes.
+    Admin approval/rejection ends the loop immediately. No payment API is called.
+    """
+    started = asyncio.get_running_loop().time()
+    index = 0
+    total_seconds = 10 * 60
+    while asyncio.get_running_loop().time() - started < total_seconds:
+        order = next((x for x in db["coin_orders"] if x.get("id") == order_id), None)
+        if not order or order.get("status") != "verifying":
+            return
+        message, delay = VERIFY_MESSAGES[index % len(VERIFY_MESSAGES)]
+        await finish_payment_wait_message(context, order, message)
+        remaining = total_seconds - (asyncio.get_running_loop().time() - started)
+        await asyncio.sleep(min(delay, max(0.1, remaining)))
+        index += 1
+
+    order = next((x for x in db["coin_orders"] if x.get("id") == order_id), None)
+    if not order or order.get("status") != "verifying":
+        return
+    order["status"] = "manual_review"
+    order["auto_verify_failed_at"] = iso_now()
+    save_db()
+    await finish_payment_wait_message(
+        context, order,
+        "⚠️ <b>Auto-verify failed.</b> Sent to admin for manual check. You will be notified!",
+        contact_admin_kb(),
+    )
+
 async def show_buy_auto(query, context):
     context.user_data.clear()
     context.user_data["flow"] = "auto"
@@ -492,12 +598,24 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "menu_back":
         context.user_data.clear()
-        await edit_or_reply(q, "🛍 <b>Choose an option below:</b>", main_kb(uid))
+        await q.message.reply_text(
+            f"👋 <b>Welcome, {q.from_user.first_name}!</b>\n\n"
+            "🛍 <b>FF Autolikes Shop Bot</b>\n\n"
+            "Choose an option below:",
+            reply_markup=main_kb(uid), parse_mode="HTML"
+        )
         return
 
     if data == "cancel_flow":
         context.user_data.clear()
         await safe_delete(context.bot, q.message.chat_id, q.message.message_id)
+        await context.bot.send_message(
+            chat_id=q.message.chat_id,
+            text=f"👋 <b>Welcome, {q.from_user.first_name}!</b>\n\n"
+            "🛍 <b>FF Autolikes Shop Bot</b>\n\n"
+            "Choose an option below:",
+            reply_markup=main_kb(uid), parse_mode="HTML"
+        )
         return
 
     if data == "menu_buy_auto":
@@ -615,31 +733,35 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not coin_amount:
             await q.answer("Package unavailable", show_alert=True); return
         context.user_data.update({"flow": "coin_payment", "pay_amount": amount, "pay_coins": coin_amount})
-        cfg = db["config"]
         text = payment_text(amount, coin_amount)
-        qr = cfg.get("payment_qr_file_id")
+        buttons = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📸 I Have Paid", callback_data="coin_paid")],
+            [InlineKeyboardButton("📹 How to Pay", callback_data="how_to_pay")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")],
+        ])
         try:
-            if qr:
-                await q.message.reply_photo(photo=qr, caption=text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📸 I Have Paid", callback_data="coin_paid")],
-                    [InlineKeyboardButton("📹 How to Pay", callback_data="how_to_pay")],
-                    [InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")],
-                ]))
-                await safe_delete(context.bot, q.message.chat_id, q.message.message_id)
-            else:
-                await edit_or_reply(q, text, InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📸 I Have Paid", callback_data="coin_paid")],
-                    [InlineKeyboardButton("📹 How to Pay", callback_data="how_to_pay")],
-                    [InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")],
-                ]))
-        except Exception:
-            await edit_or_reply(q, text, how_to_pay_kb())
+            # Always generate a fresh QR for the exact selected amount.
+            qr_image = make_payment_qr(amount)
+            await q.message.reply_photo(
+                photo=qr_image, caption=text, parse_mode="HTML", reply_markup=buttons
+            )
+            await safe_delete(context.bot, q.message.chat_id, q.message.message_id)
+        except Exception as e:
+            print("QR generation/send error:", e)
+            await edit_or_reply(q, text, buttons)
         return
 
     if data == "how_to_pay":
         url = db["config"].get("how_to_pay_url", "")
         if url:
-            await q.message.reply_text(f"📹 {db['config'].get('how_to_pay_text','How to Pay')}: {url}")
+            await q.message.reply_text(
+                f"📹 <b>{db['config'].get('how_to_pay_text','How to Pay')}</b>",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("▶️ Open How to Pay", url=url)],
+                    [InlineKeyboardButton("⬅️ Back", callback_data="menu_buy_coins")],
+                ])
+            )
         else:
             await q.answer("How-to-pay link is not set yet.", show_alert=True)
         return
@@ -655,7 +777,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "verify_enter_code":
         context.user_data.clear(); context.user_data["flow"] = "verify_code"
-        await edit_or_reply(q, "🔑 <b>Enter verification code</b>", cancel_kb("earn_verify"))
+        await edit_or_reply(q, "🔑 <b>Enter verification code</b>", cancel_kb("cancel_flow"))
         return
 
     # ---------- Earn ----------
@@ -692,6 +814,49 @@ async def msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.text:
         return
     text = update.message.text.strip()
+
+    # Reply-keyboard main menu always has priority over an unfinished flow.
+    if text in MENU_TEXT_TO_CALLBACK:
+        data = MENU_TEXT_TO_CALLBACK[text]
+        context.user_data.clear()
+        if data == "menu_buy_auto":
+            context.user_data["flow"] = "auto"
+            await update.message.reply_text(
+                "🛒 <b>Select Autolike Package</b>\n\nChoose your package type:",
+                reply_markup=package_kb(), parse_mode="HTML"
+            )
+        elif data == "menu_my_auto":
+            # Reuse a tiny message-like adapter by directly rendering the list.
+            uid = str(update.effective_user.id)
+            orders = [o for o in db["autolike_orders"] if str(o.get("user_id")) == uid and o.get("status") == "approved"]
+            if not orders:
+                body = "📁 <b>My Autolikes</b>\n\nNo orders show here yet.\n\nYour accepted AutoLike orders will appear here."
+            else:
+                lines = []
+                for i, o in enumerate(reversed(orders[-20:]), 1):
+                    lines.append(f"<b>{i}. {o['package_title']}</b>\nUID: <code>{o['uid']}</code>\nRegion: {REGION_NAMES.get(o['region'], o['region'])}\nDays: {o['days']}\nStatus: {o['status'].title()}\nAccepted: {o.get('approved_at','N/A')}")
+                body = "📁 <b>My Autolikes</b>\n\n" + "\n\n".join(lines)
+            await update.message.reply_text(body, reply_markup=back_menu_kb(), parse_mode="HTML")
+        elif data == "menu_redeem":
+            context.user_data["flow"] = "redeem"
+            await update.message.reply_text("🎟 <b>Enter your redeem code</b>", reply_markup=cancel_kb(), parse_mode="HTML")
+        elif data == "menu_buy_coins":
+            context.user_data["flow"] = "coins"
+            await update.message.reply_text("💰 <b>Select UPI Package</b>\n\nChoose the amount you want to pay:", reply_markup=payment_packages_kb(), parse_mode="HTML")
+        elif data == "menu_balance":
+            u2 = db["users"].get(str(update.effective_user.id), {})
+            await update.message.reply_text(
+                "💳 <b>My Balance</b>\n\n"
+                f"Current balance: <b>{fmt_coins(u2.get('coins',0))} coins</b>\n"
+                f"Total bought: <b>{fmt_coins(u2.get('total_bought',0))} coins</b>\n"
+                f"Total earned: <b>{fmt_coins(u2.get('total_earned',0))} coins</b>",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Coins", callback_data="menu_buy_coins")]]), parse_mode="HTML"
+            )
+        elif data == "menu_earn":
+            await update.message.reply_text("👥 <b>Earn Coins</b>\n\nChoose a method:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔗 Verify & Earn", callback_data="earn_verify")],[InlineKeyboardButton("👥 Refer & Earn", callback_data="earn_ref")]]), parse_mode="HTML")
+        elif data == "menu_help":
+            await update.message.reply_text("❓ <b>Help & Support</b>\n\nUse the buttons in the main menu.\n\nFor payment verification or any issue, contact admin.", reply_markup=contact_admin_kb(), parse_mode="HTML")
+        return
 
     if flow == "auto_uid":
         if not valid_uid(text):
@@ -758,7 +923,12 @@ async def msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_db()
         context.user_data.clear()
 
-        wait = await update.message.reply_text("⏳ <b>Auto-verifying payment details...</b>", parse_mode="HTML")
+        wait = await update.message.reply_text(
+            "⏳ <b>Auto-verifying payment details...</b>", parse_mode="HTML"
+        )
+        order["verification_chat_id"] = update.effective_chat.id
+        order["verification_message_id"] = wait.message_id
+        save_db()
         await send_admins(context,
             "💳 <b>New Coin Payment</b>\n\n"
             f"Order ID: <code>{order_id}</code>\n"
@@ -768,13 +938,8 @@ async def msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Coins: {order['coins']}\n"
             f"UTR: <code>{order['utr']}</code>",
             admin_payment_actions(order_id), photo=order["photo_id"] or None)
-        await asyncio.sleep(5)
-        try:
-            await wait.edit_text(
-                "⚠️ <b>Auto-verify failed.</b> Sent to admin for manual check. You will be notified!",
-                parse_mode="HTML", reply_markup=contact_admin_kb())
-        except Exception:
-            pass
+        # Run the 10-minute changing verification status in the background.
+        asyncio.create_task(payment_verification_loop(context, order_id))
         return
 
     if flow == "verify_code":
@@ -894,7 +1059,7 @@ async def admin_callback(q, context, data):
         save_db(); await edit_or_reply(q, "🗑 Order removed.", admin_back_kb()); return
 
     if data == "admin_coin_pending":
-        orders = [o for o in db["coin_orders"] if o.get("status") in ("verifying", "pending")]
+        orders = [o for o in db["coin_orders"] if o.get("status") in ("verifying", "pending", "manual_review")]
         if not orders:
             await edit_or_reply(q, "💳 <b>Pending Coin Payments</b>\n\nNo pending payments.", admin_back_kb()); return
         o = orders[0]
@@ -904,7 +1069,7 @@ async def admin_callback(q, context, data):
     if data.startswith("admin_coin_approve_"):
         oid = data.rsplit("_", 1)[-1]
         o = next((x for x in db["coin_orders"] if x["id"] == oid), None)
-        if not o or o.get("status") not in ("verifying", "pending"):
+        if not o or o.get("status") not in ("verifying", "pending", "manual_review"):
             await q.answer("Payment is no longer pending.", show_alert=True); return
         o["status"] = "approved"; o["approved_at"] = iso_now()
         u = user_record_from_id(o["user_id"])
@@ -912,6 +1077,13 @@ async def admin_callback(q, context, data):
         u["total_bought"] = coins(u.get("total_bought", 0) + o["coins"])
         db["stats"]["total_bought_coins"] = coins(db["stats"].get("total_bought_coins", 0) + o["coins"])
         save_db()
+        await finish_payment_wait_message(
+            context, o,
+            "✅ <b>Payment Approved</b>\n\n"
+            f"Amount: ₹{o['amount']}\nCoins added: <b>{fmt_coins(o['coins'])}</b>\n"
+            f"New balance: <b>{fmt_coins(u['coins'])}</b>",
+            main_kb(o["user_id"]),
+        )
         await notify_user(context, o["user_id"],
                           "✅ <b>Payment Approved</b>\n\n"
                           f"Amount: ₹{o['amount']}\nCoins added: <b>{fmt_coins(o['coins'])}</b>\n"
@@ -922,7 +1094,15 @@ async def admin_callback(q, context, data):
         oid = data.rsplit("_", 1)[-1]
         o = next((x for x in db["coin_orders"] if x["id"] == oid), None)
         if o:
+            if o.get("status") not in ("verifying", "pending", "manual_review"):
+                await q.answer("Payment is no longer pending.", show_alert=True); return
             o["status"] = "rejected"; o["rejected_at"] = iso_now(); save_db()
+            await finish_payment_wait_message(
+                context, o,
+                "❌ <b>Payment Verification Failed</b>\n\n"
+                f"Order: <code>{oid}</code>\nPlease contact admin if you think this is an error.",
+                contact_admin_kb(),
+            )
             await notify_user(context, o["user_id"],
                               "❌ <b>Payment Verification Failed</b>\n\n"
                               f"Order: <code>{oid}</code>\nPlease contact admin if you think this is an error.", contact_admin_kb())
@@ -1099,9 +1279,18 @@ async def handle_admin_text(update, context, text):
         oid = context.user_data.get("admin_order_id")
         o = next((x for x in db["coin_orders"] if x["id"] == oid), None)
         if not o: await update.message.reply_text("Order not found."); context.user_data.clear(); return
+        if o.get("status") not in ("verifying", "pending", "manual_review"):
+            await update.message.reply_text("Payment is no longer pending.", reply_markup=admin_back_kb()); context.user_data.clear(); return
         u = user_record_from_id(o["user_id"]); u["coins"] = coins(u.get("coins",0) + amount)
         o["status"] = "approved"; o["approved_at"] = iso_now(); o["custom_added"] = amount
         save_db(); context.user_data.clear()
+        await finish_payment_wait_message(
+            context, o,
+            "✅ <b>Payment Approved</b>\n\n"
+            f"Custom balance added: <b>{fmt_coins(amount)} coins</b>\n"
+            f"New balance: <b>{fmt_coins(u['coins'])}</b>",
+            main_kb(o["user_id"]),
+        )
         await notify_user(context, o["user_id"], f"✅ Admin updated your balance.\n\nAdded: <b>{fmt_coins(amount)} coins</b>\nBalance: <b>{fmt_coins(u['coins'])}</b>", back_menu_kb())
         await update.message.reply_text("✅ Balance updated and payment marked approved.", reply_markup=admin_back_kb()); return
 
