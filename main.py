@@ -258,7 +258,7 @@ def payment_packages_kb():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"{label} → {coin} coins", callback_data=f"coin_pkg_{amount}")]
         for label, amount, coin in packages
-    ] + [[InlineKeyboardButton("❌ Cancel", callback_data="menu_back")]])
+    ] + [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")]])
 
 
 def payment_uri(amount):
@@ -491,7 +491,7 @@ async def payment_verification_loop(context, order_id):
     save_db()
     await finish_payment_wait_message(
         context, order,
-        "⚠️ <b>Auto-verify failed.</b> Sent to admin for manual check. You will be notified!",
+        "⚠️ <b>Auto-verify failed.</b>\n\nPlease contact admin for manual verification.",
         contact_admin_kb(),
     )
 
@@ -860,7 +860,7 @@ async def msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if flow == "auto_uid":
         if not valid_uid(text):
-            await update.message.reply_text("❌ Invalid UID. Please enter a numeric Free Fire UID (6–15 digits).")
+            await update.message.reply_text("❌ Invalid UID. Please enter a numeric Free Fire UID (6–15 digits).", parse_mode="HTML")
             return
         context.user_data["uid"] = text
         context.user_data["flow"] = "auto_confirm"
@@ -883,10 +883,10 @@ async def msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         code = text.upper()
         item = db["redeem_codes"].get(code)
         if not item or not item.get("active", True):
-            await update.message.reply_text("❌ Invalid or inactive redeem code.", reply_markup=back_menu_kb())
+            await update.message.reply_text("❌ Invalid or inactive redeem code.", reply_markup=back_menu_kb(), parse_mode="HTML")
             context.user_data.clear(); return
         if str(update.effective_user.id) in item.setdefault("used_by", []):
-            await update.message.reply_text("⚠️ You have already used this code.", reply_markup=back_menu_kb())
+            await update.message.reply_text("⚠️ You have already used this code.", reply_markup=back_menu_kb(), parse_mode="HTML")
             context.user_data.clear(); return
         reward = coins(item.get("coins", 0))
         item["used_by"].append(str(update.effective_user.id))
@@ -904,7 +904,7 @@ async def msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if flow == "coin_utr":
         if not valid_utr(text):
-            await update.message.reply_text("❌ Invalid UTR. Enter 6–40 letters/numbers only.")
+            await update.message.reply_text("❌ Invalid UTR. Enter 6–40 letters/numbers only.", parse_mode="HTML")
             return
         order_id = uuid.uuid4().hex[:10].upper()
         order = {
@@ -946,12 +946,12 @@ async def msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         code = text.upper()
         matching = [t for t in db["verify_tasks"] if t.get("active", True) and str(t.get("code", "")).upper() == code]
         if not matching:
-            await update.message.reply_text("❌ Invalid or inactive verification code.", reply_markup=back_menu_kb())
+            await update.message.reply_text("❌ Invalid or inactive verification code.", reply_markup=back_menu_kb(), parse_mode="HTML")
             context.user_data.clear(); return
         task = matching[0]
         key = f"{update.effective_user.id}:{task.get('id')}"
         if key in db["verify_redemptions"]:
-            await update.message.reply_text("⚠️ This verification code has already been used by you.", reply_markup=back_menu_kb())
+            await update.message.reply_text("⚠️ This verification code has already been used by you.", reply_markup=back_menu_kb(), parse_mode="HTML")
             context.user_data.clear(); return
         reward = coins(task.get("reward", db["config"].get("verify_reward", 0.5)))
         db["verify_redemptions"][key] = iso_now()
