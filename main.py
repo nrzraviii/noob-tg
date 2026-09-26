@@ -65,36 +65,34 @@ DEFAULT_CONFIG = {
             "id": "220",
             "name": "220 Likes / Day",
             "active": True,
-            "color": "blue",
             "packages": {
-                "220p1": {"id": "220p1", "name": "❤️ 15 Coins — 1 Day » 200 Likes", "coins": 15, "days": 1, "active": True, "color": "blue"},
-                "220p2": {"id": "220p2", "name": "❤️ 90 Coins — 15 Day » 3300 Likes", "coins": 90, "days": 15, "active": True, "color": "blue"},
-                "220p3": {"id": "220p3", "name": "💎 180 Coins — 30 Day » 6600 Likes", "coins": 180, "days": 30, "active": True, "color": "blue"},
-                "220p4": {"id": "220p4", "name": "👑 350 Coins — 60 Day » 13200 Likes", "coins": 350, "days": 60, "active": True, "color": "blue"},
-                "220p5": {"id": "220p5", "name": "❤️ 740 Coins — 120 Day » 26400 Likes", "coins": 740, "days": 120, "active": True, "color": "blue"},
-                "220p6": {"id": "220p6", "name": "❤️ 1400 Coins — 240 Day » 52800 Likes", "coins": 1400, "days": 240, "active": True, "color": "blue"}
+                "220p1": {"id": "220p1", "name": "❤️ 15 Coins — 1 Day » 200 Likes", "coins": 15, "days": 1, "active": True},
+                "220p2": {"id": "220p2", "name": "❤️ 90 Coins — 15 Day » 3300 Likes", "coins": 90, "days": 15, "active": True},
+                "220p3": {"id": "220p3", "name": "💎 180 Coins — 30 Day » 6600 Likes", "coins": 180, "days": 30, "active": True},
+                "220p4": {"id": "220p4", "name": "👑 350 Coins — 60 Day » 13200 Likes", "coins": 350, "days": 60, "active": True},
+                "220p5": {"id": "220p5", "name": "❤️ 740 Coins — 120 Day » 26400 Likes", "coins": 740, "days": 120, "active": True},
+                "220p6": {"id": "220p6", "name": "❤️ 1400 Coins — 240 Day » 52800 Likes", "coins": 1400, "days": 240, "active": True}
             },
         },
         "500": {
             "id": "500",
             "name": "500+ Likes / Day",
             "active": True,
-            "color": "blue",
             "packages": {
-                "500p1": {"id": "500p1", "name": "⚡ 45 Coins — 1 Day » 500 Likes", "coins": 45, "days": 1, "active": True, "color": "blue"},
-                "500p2": {"id": "500p2", "name": "💥 150 Coins — 7 Day » 3500 Likes", "coins": 150, "days": 7, "active": True, "color": "blue"},
-                "500p3": {"id": "500p3", "name": "💥 240 Coins — 15 Day » 7500 Likes", "coins": 240, "days": 15, "active": True, "color": "blue"},
-                "500p4": {"id": "500p4", "name": "🔥 500 Coins — 30 Day » 15000 Likes", "coins": 500, "days": 30, "active": True, "color": "blue"},
-                "500p5": {"id": "500p5", "name": "👑 1000 Coins — 60 Day » 30000 Likes", "coins": 1000, "days": 60, "active": True, "color": "blue"}
+                "500p1": {"id": "500p1", "name": "⚡ 45 Coins — 1 Day » 500 Likes", "coins": 45, "days": 1, "active": True},
+                "500p2": {"id": "500p2", "name": "💥 150 Coins — 7 Day » 3500 Likes", "coins": 150, "days": 7, "active": True},
+                "500p3": {"id": "500p3", "name": "💥 240 Coins — 15 Day » 7500 Likes", "coins": 240, "days": 15, "active": True},
+                "500p4": {"id": "500p4", "name": "🔥 500 Coins — 30 Day » 15000 Likes", "coins": 500, "days": 30, "active": True},
+                "500p5": {"id": "500p5", "name": "👑 1000 Coins — 60 Day » 30000 Likes", "coins": 1000, "days": 60, "active": True}
             },
         },
     },
     "coin_pricing": [
-        {"id": "p50", "amount": 50, "coins": 55, "active": True, "color": "blue"},
-        {"id": "p100", "amount": 100, "coins": 110, "active": True, "color": "blue"},
-        {"id": "p200", "amount": 200, "coins": 220, "active": True, "color": "blue"},
-        {"id": "p500", "amount": 500, "coins": 575, "active": True, "color": "blue"},
-        {"id": "p1000", "amount": 1000, "coins": 1200, "active": True, "color": "blue"},
+        {"id": "p50", "amount": 50, "coins": 55, "active": True},
+        {"id": "p100", "amount": 100, "coins": 110, "active": True},
+        {"id": "p200", "amount": 200, "coins": 220, "active": True},
+        {"id": "p500", "amount": 500, "coins": 575, "active": True},
+        {"id": "p1000", "amount": 1000, "coins": 1200, "active": True},
     ],
 }
 
@@ -199,16 +197,14 @@ def normalize_catalog_config():
                 "id": key,
                 "name": title,
                 "active": True,
-                "color": "blue",
-                "packages": {
+                    "packages": {
                     f"{key}pkg": {
                         "id": f"{key}pkg",
                         "name": title,
                         "coins": coins(item.get("coins", 0)),
                         "days": int(item.get("days", 1)),
                         "active": True,
-                        "color": "blue",
-                    }
+                                }
                 },
             }
         cfg["plans"] = plans
@@ -238,8 +234,6 @@ def normalize_catalog_config():
         plan["id"] = str(plan.get("id") or pid)
         plan.setdefault("name", str(pid))
         plan.setdefault("active", True)
-        pc = str(plan.get("color", "blue")).lower()
-        plan["color"] = pc if pc in ("blue", "green", "red") else "blue"
         pkgs = plan.get("packages", {})
         if isinstance(pkgs, list):
             pkgs = {str(x.get("id") or uuid.uuid4().hex[:8]): x for x in pkgs}
@@ -253,17 +247,15 @@ def normalize_catalog_config():
             except (TypeError, ValueError):
                 pkg["days"] = 1
             pkg.setdefault("active", True)
-            c = str(pkg.get("color", "blue")).lower()
-            pkg["color"] = c if c in ("blue", "green", "red") else "blue"
 
     pricing = cfg.get("coin_pricing")
     if not isinstance(pricing, list) or not pricing:
         cfg["coin_pricing"] = [
-            {"id": "p50", "amount": 50, "coins": 55, "active": True, "color": "blue"},
-            {"id": "p100", "amount": 100, "coins": 110, "active": True, "color": "blue"},
-            {"id": "p200", "amount": 200, "coins": 220, "active": True, "color": "blue"},
-            {"id": "p500", "amount": 500, "coins": 575, "active": True, "color": "blue"},
-            {"id": "p1000", "amount": 1000, "coins": 1200, "active": True, "color": "blue"},
+            {"id": "p50", "amount": 50, "coins": 55, "active": True},
+            {"id": "p100", "amount": 100, "coins": 110, "active": True},
+            {"id": "p200", "amount": 200, "coins": 220, "active": True},
+            {"id": "p500", "amount": 500, "coins": 575, "active": True},
+            {"id": "p1000", "amount": 1000, "coins": 1200, "active": True},
         ]
     for item in cfg["coin_pricing"]:
         item.setdefault("id", uuid.uuid4().hex[:8])
@@ -271,24 +263,33 @@ def normalize_catalog_config():
         except (TypeError, ValueError): item["amount"] = 0
         item["coins"] = coins(item.get("coins", 0))
         item.setdefault("active", True)
-        item["color"] = str(item.get("color", "blue")).lower() if str(item.get("color", "blue")).lower() in ("blue", "green", "red") else "blue"
 
 
 def InlineKeyboardButton(text, *args, **kwargs):
-    """Inline button helper for PTB 22.5/Python 3.9.
-
-    Only buttons that explicitly pass button_color get Telegram's color style.
-    This is important for compatibility: ordinary buttons remain normal Telegram
-    buttons, while configurable plan/package/pricing buttons can be blue/green/red.
-    """
-    button_color = kwargs.pop("button_color", None)
-    if button_color is not None:
-        c = str(button_color).strip().lower()
-        if c not in ("blue", "green", "red"):
-            c = "blue"
-        existing = kwargs.get("api_kwargs") or {}
-        kwargs["api_kwargs"] = {**existing, "style": c}
+    # All ordinary buttons are unstyled. Fixed colors are applied only through
+    # blue_btn/green_btn/red_btn below; there is no user/admin color setting.
     return _TelegramInlineKeyboardButton(text, *args, **kwargs)
+
+
+def _styled_button(text, callback_data=None, url=None, color="blue"):
+    kwargs = {}
+    if callback_data is not None:
+        kwargs["callback_data"] = callback_data
+    if url is not None:
+        kwargs["url"] = url
+    return _TelegramInlineKeyboardButton(text, api_kwargs={"style": color}, **kwargs)
+
+
+def blue_btn(text, callback_data=None, url=None):
+    return _styled_button(text, callback_data, url, "primary")
+
+
+def green_btn(text, callback_data=None, url=None):
+    return _styled_button(text, callback_data, url, "success")
+
+
+def red_btn(text, callback_data=None, url=None):
+    return _styled_button(text, callback_data, url, "danger")
 
 
 def save_db():
@@ -356,11 +357,11 @@ def main_kb(user_id=None):
 
 
 def back_menu_kb():
-    return InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="menu_back")]])
+    return InlineKeyboardMarkup([[red_btn("⬅️ Back", callback_data="menu_back")]])
 
 
 def cancel_kb(callback="cancel_flow"):
-    return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data=callback)]])
+    return InlineKeyboardMarkup([[red_btn("❌ Cancel", callback_data=callback)]])
 
 
 def get_plans(include_inactive=False):
@@ -378,61 +379,63 @@ def find_package(plan, package_id):
     return plan.get("packages", {}).get(str(package_id))
 
 
-def package_kb(use_colors=True):
+def plan_button_color(plan_id):
+    # Fixed user-facing colors: 220 plan = blue, 500 plan = green.
+    return "success" if str(plan_id) == "500" else "primary"
+
+
+def package_kb():
     rows = []
     for p in get_plans():
         label = str(p.get("name", "Plan"))
-        if use_colors:
-            btn = InlineKeyboardButton(label, callback_data=f"auto_plan_{p['id']}", button_color=p.get("color", "blue"))
+        if str(p.get("id")) == "500":
+            btn = green_btn(label, callback_data=f"auto_plan_{p['id']}")
         else:
-            btn = _TelegramInlineKeyboardButton(label, callback_data=f"auto_plan_{p['id']}")
+            btn = blue_btn(label, callback_data=f"auto_plan_{p['id']}")
         rows.append([btn])
-    rows.append([_TelegramInlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
+    rows.append([red_btn("❌ Cancel", callback_data="cancel_flow")])
     return InlineKeyboardMarkup(rows)
 
-def plan_packages_kb(plan, use_colors=True):
+
+def plan_packages_kb(plan):
     rows = []
+    color = plan_button_color(plan.get("id"))
     for pkg in plan.get("packages", {}).values():
         if pkg.get("active", True):
             label = str(pkg.get("name", "Package"))
-            if use_colors:
-                btn = InlineKeyboardButton(label, callback_data=f"auto_pkg_{plan['id']}_{pkg['id']}", button_color=pkg.get("color", "blue"))
-            else:
-                btn = _TelegramInlineKeyboardButton(label, callback_data=f"auto_pkg_{plan['id']}_{pkg['id']}")
+            btn = _styled_button(label, callback_data=f"auto_pkg_{plan['id']}_{pkg['id']}", color=color)
             rows.append([btn])
-    rows.append([_TelegramInlineKeyboardButton("⬅️ Back", callback_data="menu_buy_auto")])
-    rows.append([_TelegramInlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
+    rows.append([red_btn("⬅️ Back", callback_data="menu_buy_auto")])
+    rows.append([red_btn("❌ Cancel", callback_data="cancel_flow")])
     return InlineKeyboardMarkup(rows)
+
 
 def region_kb(prefix="auto_region"):
     rows = []
     for i in range(0, len(REGIONS), 2):
         row = []
         for label, code in REGIONS[i:i+2]:
-            row.append(InlineKeyboardButton(label, callback_data=f"{prefix}_{code}"))
+            row.append(blue_btn(label, callback_data=f"{prefix}_{code}"))
         rows.append(row)
-    rows.append([InlineKeyboardButton("⬅️ Back", callback_data="menu_buy_auto")])
+    rows.append([red_btn("⬅️ Back", callback_data="menu_buy_auto")])
+    rows.append([red_btn("❌ Cancel", callback_data="cancel_flow")])
     return InlineKeyboardMarkup(rows)
 
 
 def summary_kb():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Confirm Order", callback_data="auto_confirm"),
-         InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")],
+        [green_btn("✅ Confirm Order", callback_data="auto_confirm")],
+        [red_btn("⬅️ Back", callback_data="menu_back"), red_btn("❌ Cancel", callback_data="cancel_flow")],
     ])
 
 
-def payment_packages_kb(use_colors=True):
+def payment_packages_kb():
     rows = []
     for item in db["config"].get("coin_pricing", []):
         if item.get("active", True):
             label = f"₹{item['amount']} → {fmt_coins(item['coins'])} coins"
-            if use_colors:
-                btn = InlineKeyboardButton(label, callback_data=f"coin_pkg_{item['id']}", button_color=item.get("color", "blue"))
-            else:
-                btn = _TelegramInlineKeyboardButton(label, callback_data=f"coin_pkg_{item['id']}")
-            rows.append([btn])
-    rows.append([_TelegramInlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
+            rows.append([green_btn(label, callback_data=f"coin_pkg_{item['id']}")])
+    rows.append([red_btn("⬅️ Back", callback_data="menu_back"), red_btn("❌ Cancel", callback_data="cancel_flow")])
     return InlineKeyboardMarkup(rows)
 
 def payment_uri(amount):
@@ -510,6 +513,13 @@ def contact_admin_kb():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("👤 Contact Admin", url=f"https://t.me/{username}")],
         [InlineKeyboardButton("⬅️ Back", callback_data="menu_back")],
+    ])
+
+
+def help_kb():
+    return InlineKeyboardMarkup([
+        [blue_btn("📖 How to Use the Bot", callback_data="help_howto")],
+        [red_btn("👤 Contact Admin", url="https://t.me/nrzravi")],
     ])
 
 
@@ -669,14 +679,8 @@ async def payment_verification_loop(context, order_id):
         contact_admin_kb(),
     )
 
-async def send_menu_message(message, text, colored_markup, plain_markup):
-    """Send a menu with colored buttons, falling back to normal buttons if the
-    current Telegram/API layer rejects the newer button style field."""
-    try:
-        return await message.reply_text(text, reply_markup=colored_markup, parse_mode="HTML")
-    except Exception as e:
-        print("Colored menu failed; using plain buttons:", repr(e))
-        return await message.reply_text(text, reply_markup=plain_markup, parse_mode="HTML")
+async def send_menu_message(message, text, markup, plain_markup=None):
+    return await message.reply_text(text, reply_markup=markup, parse_mode="HTML")
 
 
 async def show_menu_from_message(message, kind):
@@ -684,14 +688,14 @@ async def show_menu_from_message(message, kind):
         return await send_menu_message(
             message,
             "🛒 <b>Select Autolike Plan</b>\n\nChoose your package type:",
-            package_kb(True),
-            package_kb(False),
+            package_kb(),
+            package_kb(),
         )
     return await send_menu_message(
         message,
         "💰 <b>Select UPI Package</b>\n\nChoose the amount you want to pay:",
-        payment_packages_kb(True),
-        payment_packages_kb(False),
+        payment_packages_kb(),
+        payment_packages_kb(),
     )
 
 
@@ -699,22 +703,14 @@ async def show_buy_auto(query, context):
     context.user_data.clear()
     context.user_data["flow"] = "auto"
     text = "🛒 <b>Select Autolike Plan</b>\n\nChoose your package type:"
-    try:
-        await query.edit_message_text(text, reply_markup=package_kb(True), parse_mode="HTML")
-    except Exception as e:
-        print("Buy Autolike colored menu failed:", repr(e))
-        await query.message.reply_text(text, reply_markup=package_kb(False), parse_mode="HTML")
+    await query.edit_message_text(text, reply_markup=package_kb(), parse_mode="HTML")
 
 
 async def show_buy_coins(query, context):
     context.user_data.clear()
     context.user_data["flow"] = "coins"
     text = "💰 <b>Select UPI Package</b>\n\nChoose the amount you want to pay:"
-    try:
-        await query.edit_message_text(text, reply_markup=payment_packages_kb(True), parse_mode="HTML")
-    except Exception as e:
-        print("Buy Coins colored menu failed:", repr(e))
-        await query.message.reply_text(text, reply_markup=payment_packages_kb(False), parse_mode="HTML")
+    await query.edit_message_text(text, reply_markup=payment_packages_kb(), parse_mode="HTML")
 
 
 async def show_balance(query):
@@ -726,8 +722,8 @@ async def show_balance(query):
         f"Total earned: <b>{fmt_coins(u.get('total_earned', 0))} coins</b>"
     )
     markup = InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Add Coins", callback_data="menu_buy_coins")],
-        [InlineKeyboardButton("⬅️ Back", callback_data="menu_back")],
+        [green_btn("➕ Add Coins", callback_data="menu_buy_coins")],
+        [red_btn("⬅️ Back", callback_data="menu_back")],
     ])
     await edit_or_reply(query, text, markup)
 
@@ -845,10 +841,26 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data == "menu_help":
         await edit_or_reply(q,
-            "❓ <b>Help & Support</b>\n\n"
-            "Use the buttons in the main menu.\n\n"
-            "For payment verification or any issue, contact admin.",
-            contact_admin_kb())
+            "❓ <b>Help &amp; Support</b>\n\n"
+            "How to use the bot:\n"
+            "• Buy Autolike – Select type, plan, region, enter UID.\n"
+            "• Redeem Code – Enter code to get coins/discount.\n"
+            "• Refer Earn – Share link &amp; earn coins.\n"
+            "• Wallet – Check balance &amp; buy coins.\n\n"
+            "👤 Admin: @nrzravi",
+            help_kb())
+        return
+
+    if data == "help_howto":
+        await edit_or_reply(q,
+            "📖 <b>How to use the bot</b>\n\n"
+            "• Buy Autolike – Select type, plan, region, enter UID.\n"
+            "• Redeem Code – Enter code to get coins/discount.\n"
+            "• Refer Earn – Share link &amp; earn coins.\n"
+            "• Wallet – Check balance &amp; buy coins.\n\n"
+            "👤 Admin: @nrzravi",
+            InlineKeyboardMarkup([[red_btn("⬅️ Back", callback_data="menu_help")],
+                                  [red_btn("👤 Contact Admin", url="https://t.me/nrzravi")]]))
         return
 
     # ---------- AutoLike flow ----------
@@ -975,9 +987,9 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.update({"flow": "coin_payment", "pay_amount": amount, "pay_coins": coin_amount})
         text = payment_text(amount, coin_amount)
         buttons = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📸 I Have Paid", callback_data="coin_paid")],
-            [InlineKeyboardButton("📹 How to Pay", callback_data="how_to_pay")],
-            [InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")],
+            [green_btn("📸 I Have Paid", callback_data="coin_paid")],
+            [blue_btn("📹 How to Pay", callback_data="how_to_pay")],
+            [red_btn("⬅️ Back", callback_data="menu_buy_coins"), red_btn("❌ Cancel", callback_data="cancel_flow")],
         ])
         try:
             # Always generate a fresh QR for the exact selected amount.
@@ -998,8 +1010,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📹 <b>{db['config'].get('how_to_pay_text','How to Pay')}</b>",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("▶️ Open How to Pay", url=url)],
-                    [InlineKeyboardButton("⬅️ Back", callback_data="menu_buy_coins")],
+                    [blue_btn("▶️ Open How to Pay", url=url)],
+                    [red_btn("⬅️ Back", callback_data="menu_buy_coins")],
                 ])
             )
         else:
@@ -1105,12 +1117,20 @@ async def msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Current balance: <b>{fmt_coins(u2.get('coins',0))} coins</b>\n"
                 f"Total bought: <b>{fmt_coins(u2.get('total_bought',0))} coins</b>\n"
                 f"Total earned: <b>{fmt_coins(u2.get('total_earned',0))} coins</b>",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Coins", callback_data="menu_buy_coins")]]), parse_mode="HTML"
+                reply_markup=InlineKeyboardMarkup([[green_btn("➕ Add Coins", callback_data="menu_buy_coins")]]), parse_mode="HTML"
             )
         elif data == "menu_earn":
             await update.message.reply_text("👥 <b>Earn Coins</b>\n\nChoose a method:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔗 Verify & Earn", callback_data="earn_verify")],[InlineKeyboardButton("👥 Refer & Earn", callback_data="earn_ref")]]), parse_mode="HTML")
         elif data == "menu_help":
-            await update.message.reply_text("❓ <b>Help & Support</b>\n\nUse the buttons in the main menu.\n\nFor payment verification or any issue, contact admin.", reply_markup=contact_admin_kb(), parse_mode="HTML")
+            await update.message.reply_text(
+                "❓ <b>Help &amp; Support</b>\n\n"
+                "How to use the bot:\n"
+                "• Buy Autolike – Select type, plan, region, enter UID.\n"
+                "• Redeem Code – Enter code to get coins/discount.\n"
+                "• Refer Earn – Share link &amp; earn coins.\n"
+                "• Wallet – Check balance &amp; buy coins.\n\n"
+                "👤 Admin: @nrzravi",
+                reply_markup=help_kb(), parse_mode="HTML")
         return
 
     if flow == "auto_uid":
@@ -1509,7 +1529,7 @@ async def admin_callback(q, context, data):
         toggle="🔴 Make Inactive" if plan.get("active",True) else "🟢 Make Active"
         await edit_or_reply(q,f"🛒 <b>{escape(str(plan.get('name','Plan')))}</b>\n\nStatus: <b>{status}</b>\nPackages: <b>{count}</b>",InlineKeyboardMarkup([
             [InlineKeyboardButton("📦 Manage Packages",callback_data=f"admin_plan_packages_{pid}")],
-            [InlineKeyboardButton("✏️ Edit Name",callback_data=f"admin_plan_edit_name_{pid}"),InlineKeyboardButton("🎨 Edit Color",callback_data=f"admin_plan_edit_color_{pid}")],
+            [InlineKeyboardButton("✏️ Edit Name",callback_data=f"admin_plan_edit_name_{pid}")],
             [InlineKeyboardButton(toggle,callback_data=f"admin_plan_status_{pid}"),InlineKeyboardButton("🗑 Delete",callback_data=f"admin_plan_delete_{pid}")],
             [InlineKeyboardButton("⬅️ Back",callback_data="admin_manage_plans")],
         ])); return
@@ -1526,11 +1546,6 @@ async def admin_callback(q, context, data):
         if pid in db["config"].get("plans",{}): del db["config"]["plans"][pid]; save_db()
         await edit_or_reply(q,"🗑 Plan deleted.",InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Manage Plans",callback_data="admin_manage_plans")]])); return
 
-    if data.startswith("admin_plan_edit_color_"):
-        pid=data[len("admin_plan_edit_color_"):]
-        if not find_plan(pid): await q.answer("Plan not found.",show_alert=True); return
-        context.user_data.update({"flow":"admin_plan_edit_color","admin_plan_id":pid})
-        await edit_or_reply(q,"🎨 Send plan button color: <code>blue</code>, <code>green</code> or <code>red</code>",admin_back_kb()); return
 
     if data.startswith("admin_plan_edit_name_"):
         pid=data[len("admin_plan_edit_name_"):]; context.user_data.update({"flow":"admin_plan_edit_name","admin_plan_id":pid})
@@ -1558,18 +1573,11 @@ async def admin_callback(q, context, data):
         toggle="🔴 Make Inactive" if pkg.get("active",True) else "🟢 Make Active"
         await edit_or_reply(q,f"📦 <b>{escape(str(pkg.get('name','Package')))}</b>\n\nStatus: <b>{status}</b>\nCoins: <b>{fmt_coins(pkg.get('coins',0))}</b>\nDays: <b>{int(pkg.get('days',1))}</b>",InlineKeyboardMarkup([
             [InlineKeyboardButton("✏️ Edit Name",callback_data=f"admin_pkg_edit_name_{pid}_{pkgid}")],
-            [InlineKeyboardButton("🎨 Edit Color",callback_data=f"admin_pkg_edit_color_{pid}_{pkgid}")],
             [InlineKeyboardButton("🪙 Edit Coins",callback_data=f"admin_pkg_edit_coins_{pid}_{pkgid}"),InlineKeyboardButton("📅 Edit Days",callback_data=f"admin_pkg_edit_days_{pid}_{pkgid}")],
             [InlineKeyboardButton(toggle,callback_data=f"admin_pkg_status_{pid}_{pkgid}"),InlineKeyboardButton("🗑 Delete",callback_data=f"admin_pkg_delete_{pid}_{pkgid}")],
             [InlineKeyboardButton("⬅️ Back",callback_data=f"admin_plan_packages_{pid}")],
         ])); return
 
-    if data.startswith("admin_pkg_edit_color_"):
-        raw=data[len("admin_pkg_edit_color_"): ]
-        try: pid,pkgid=raw.split("_",1)
-        except ValueError: await q.answer("Package not found.",show_alert=True); return
-        context.user_data.update({"flow":"admin_pkg_edit_color","admin_plan_id":pid,"admin_package_id":pkgid})
-        await edit_or_reply(q,"🎨 Send button color: <code>blue</code>, <code>green</code> or <code>red</code>",admin_back_kb()); return
 
     for prefix, flow_name, prompt in [
         ("admin_pkg_edit_name_","admin_pkg_edit_name","✏️ Send the new package button name:"),
@@ -1622,15 +1630,10 @@ async def admin_callback(q, context, data):
         toggle="🔴 Make Inactive" if item.get("active",True) else "🟢 Make Active"
         await edit_or_reply(q,f"💰 <b>₹{item.get('amount',0)} → {fmt_coins(item.get('coins',0))} coins</b>\n\nStatus: <b>{status}</b>",InlineKeyboardMarkup([
             [InlineKeyboardButton("✏️ Edit ₹ Amount",callback_data=f"admin_price_edit_amount_{pid}"),InlineKeyboardButton("🪙 Edit Coins",callback_data=f"admin_price_edit_coins_{pid}")],
-            [InlineKeyboardButton("🎨 Edit Color",callback_data=f"admin_price_edit_color_{pid}")],
             [InlineKeyboardButton(toggle,callback_data=f"admin_price_status_{pid}"),InlineKeyboardButton("🗑 Delete",callback_data=f"admin_price_delete_{pid}")],
             [InlineKeyboardButton("⬅️ Back",callback_data="admin_manage_pricing")],
         ])); return
 
-    if data.startswith("admin_price_edit_color_"):
-        pid=data[len("admin_price_edit_color_"):]
-        context.user_data.update({"flow":"admin_price_edit_color","admin_price_id":pid})
-        await edit_or_reply(q,"🎨 Send button color: <code>blue</code>, <code>green</code> or <code>red</code>",admin_back_kb()); return
 
     for prefix, flow_name, prompt in [
         ("admin_price_edit_amount_","admin_price_edit_amount","✏️ Send the new ₹ amount:"),
@@ -1752,39 +1755,33 @@ async def handle_admin_text(update, context, text):
         name=text.strip()
         if not name: await update.message.reply_text("Plan name cannot be empty."); return
         pid=uuid.uuid4().hex[:8]
-        db["config"]["plans"][pid]={"id":pid,"name":name,"active":True,"color":"blue","packages":{}}
+        db["config"]["plans"][pid]={"id":pid,"name":name,"active":True,"packages":{}}
         save_db(); context.user_data.clear()
         await update.message.reply_text("✅ Plan added.",reply_markup=admin_back_kb()); return
 
-    if flow in ("admin_plan_edit_name", "admin_plan_edit_color"):
+    if flow == "admin_plan_edit_name":
         pid=context.user_data.get("admin_plan_id"); plan=find_plan(pid)
         if not plan: context.user_data.clear(); await update.message.reply_text("Plan not found."); return
         if flow=="admin_plan_edit_name":
             if not text.strip(): await update.message.reply_text("Plan name cannot be empty."); return
             plan["name"]=text.strip()
-        else:
-            c=text.strip().lower()
-            if c not in ("blue","green","red"): await update.message.reply_text("Color must be blue, green or red."); return
-            plan["color"]=c
         save_db(); context.user_data.clear()
         await update.message.reply_text("✅ Plan updated.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back",callback_data=f"admin_plan_view_{pid}")]])); return
 
     if flow == "admin_pkg_add":
         parts=[x.strip() for x in text.split("|",3)]
-        if len(parts)!=4: await update.message.reply_text("Use: Button Name | Coins | Days | Color"); return
+        if len(parts)!=3: await update.message.reply_text("Use: Button Name | Coins | Days"); return
         try: price=coins(parts[1]); days=int(parts[2])
         except ValueError: await update.message.reply_text("Coins must be a number and Days must be a whole number."); return
-        color=parts[3].lower()
-        if color not in ("blue","green","red"): await update.message.reply_text("Color must be blue, green or red."); return
         if price<0 or days<1: await update.message.reply_text("Coins must be >= 0 and Days must be >= 1."); return
         pid=context.user_data.get("admin_plan_id"); plan=find_plan(pid)
         if not plan: context.user_data.clear(); await update.message.reply_text("Plan not found."); return
         pkgid=uuid.uuid4().hex[:8]
-        plan.setdefault("packages",{})[pkgid]={"id":pkgid,"name":parts[0],"coins":price,"days":days,"active":True,"color":color}
+        plan.setdefault("packages",{})[pkgid]={"id":pkgid,"name":parts[0],"coins":price,"days":days,"active":True}
         save_db(); context.user_data.clear()
         await update.message.reply_text("✅ Package added.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Packages",callback_data=f"admin_plan_packages_{pid}")]])); return
 
-    if flow in ("admin_pkg_edit_name","admin_pkg_edit_coins","admin_pkg_edit_days","admin_pkg_edit_color"):
+    if flow in ("admin_pkg_edit_name","admin_pkg_edit_coins","admin_pkg_edit_days"):
         pid=context.user_data.get("admin_plan_id"); pkgid=context.user_data.get("admin_package_id"); pkg=find_package(find_plan(pid),pkgid)
         if not pkg: context.user_data.clear(); await update.message.reply_text("Package not found."); return
         if flow=="admin_pkg_edit_name":
@@ -1797,26 +1794,20 @@ async def handle_admin_text(update, context, text):
             try: pkg["days"]=int(text)
             except ValueError: await update.message.reply_text("Enter a whole number of days."); return
             if pkg["days"]<1: await update.message.reply_text("Days must be at least 1."); return
-        else:
-            c=text.strip().lower()
-            if c not in ("blue","green","red"): await update.message.reply_text("Color must be blue, green or red."); return
-            pkg["color"]=c
         save_db(); context.user_data.clear()
         await update.message.reply_text("✅ Package updated.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Package",callback_data=f"admin_pkg_view_{pid}_{pkgid}")]])); return
 
     if flow == "admin_price_add":
         parts=[x.strip().replace("₹","") for x in text.split("|",2)]
-        if len(parts)!=3: await update.message.reply_text("Use: ₹ Amount | Coins | Color"); return
+        if len(parts)!=2: await update.message.reply_text("Use: ₹ Amount | Coins"); return
         try: amount=int(parts[0]); coin_value=coins(parts[1])
         except ValueError: await update.message.reply_text("Amount and coins must be numeric."); return
-        color=parts[2].lower()
-        if color not in ("blue","green","red"): await update.message.reply_text("Color must be blue, green or red."); return
         if amount<=0 or coin_value<0: await update.message.reply_text("Amount must be > 0 and coins must be >= 0."); return
-        db["config"].setdefault("coin_pricing",[]).append({"id":uuid.uuid4().hex[:8],"amount":amount,"coins":coin_value,"active":True,"color":color})
+        db["config"].setdefault("coin_pricing",[]).append({"id":uuid.uuid4().hex[:8],"amount":amount,"coins":coin_value,"active":True})
         save_db(); context.user_data.clear()
         await update.message.reply_text("✅ Pricing added.",reply_markup=admin_back_kb()); return
 
-    if flow in ("admin_price_edit_amount","admin_price_edit_coins","admin_price_edit_color"):
+    if flow in ("admin_price_edit_amount","admin_price_edit_coins"):
         pid=context.user_data.get("admin_price_id"); item=next((x for x in db["config"].get("coin_pricing",[]) if str(x.get("id"))==pid),None)
         if not item: context.user_data.clear(); await update.message.reply_text("Pricing not found."); return
         try:
@@ -1824,10 +1815,6 @@ async def handle_admin_text(update, context, text):
                 item["amount"]=int(text.replace("₹",""));
                 if item["amount"]<=0: raise ValueError
             elif flow=="admin_price_edit_coins": item["coins"]=coins(text)
-            else:
-                c=text.strip().lower()
-                if c not in ("blue","green","red"): raise ValueError
-                item["color"]=c
         except ValueError: await update.message.reply_text("Enter a valid amount/coins or choose blue, green or red."); return
         save_db(); context.user_data.clear()
         await update.message.reply_text("✅ Pricing updated.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Pricing",callback_data="admin_manage_pricing")]])); return
