@@ -66,12 +66,12 @@ DEFAULT_CONFIG = {
             "name": "220 Likes / Day",
             "active": True,
             "packages": {
-                "220p1": {"id": "220p1", "name": "❤️ 15 Coins — 1 Day » 200 Likes", "coins": 15, "days": 1, "active": True},
-                "220p2": {"id": "220p2", "name": "❤️ 90 Coins — 15 Day » 3300 Likes", "coins": 90, "days": 15, "active": True},
-                "220p3": {"id": "220p3", "name": "💎 180 Coins — 30 Day » 6600 Likes", "coins": 180, "days": 30, "active": True},
-                "220p4": {"id": "220p4", "name": "👑 350 Coins — 60 Day » 13200 Likes", "coins": 350, "days": 60, "active": True},
-                "220p5": {"id": "220p5", "name": "❤️ 740 Coins — 120 Day » 26400 Likes", "coins": 740, "days": 120, "active": True},
-                "220p6": {"id": "220p6", "name": "❤️ 1400 Coins — 240 Day » 52800 Likes", "coins": 1400, "days": 240, "active": True}
+                "220p1": {"id": "220p1", "name": "❤️ 15 Coins — 1 Day » 200 Likes", "coins": 15, "days": 1, "active": True, "color": "blue"},
+                "220p2": {"id": "220p2", "name": "❤️ 90 Coins — 15 Day » 3300 Likes", "coins": 90, "days": 15, "active": True, "color": "blue"},
+                "220p3": {"id": "220p3", "name": "💎 180 Coins — 30 Day » 6600 Likes", "coins": 180, "days": 30, "active": True, "color": "blue"},
+                "220p4": {"id": "220p4", "name": "👑 350 Coins — 60 Day » 13200 Likes", "coins": 350, "days": 60, "active": True, "color": "blue"},
+                "220p5": {"id": "220p5", "name": "❤️ 740 Coins — 120 Day » 26400 Likes", "coins": 740, "days": 120, "active": True, "color": "blue"},
+                "220p6": {"id": "220p6", "name": "❤️ 1400 Coins — 240 Day » 52800 Likes", "coins": 1400, "days": 240, "active": True, "color": "blue"}
             },
         },
         "500": {
@@ -79,20 +79,20 @@ DEFAULT_CONFIG = {
             "name": "500+ Likes / Day",
             "active": True,
             "packages": {
-                "500p1": {"id": "500p1", "name": "⚡ 45 Coins — 1 Day » 500 Likes", "coins": 45, "days": 1, "active": True},
-                "500p2": {"id": "500p2", "name": "💥 150 Coins — 7 Day » 3500 Likes", "coins": 150, "days": 7, "active": True},
-                "500p3": {"id": "500p3", "name": "💥 240 Coins — 15 Day » 7500 Likes", "coins": 240, "days": 15, "active": True},
-                "500p4": {"id": "500p4", "name": "🔥 500 Coins — 30 Day » 15000 Likes", "coins": 500, "days": 30, "active": True},
-                "500p5": {"id": "500p5", "name": "👑 1000 Coins — 60 Day » 30000 Likes", "coins": 1000, "days": 60, "active": True}
+                "500p1": {"id": "500p1", "name": "⚡ 45 Coins — 1 Day » 500 Likes", "coins": 45, "days": 1, "active": True, "color": "blue"},
+                "500p2": {"id": "500p2", "name": "💥 150 Coins — 7 Day » 3500 Likes", "coins": 150, "days": 7, "active": True, "color": "blue"},
+                "500p3": {"id": "500p3", "name": "💥 240 Coins — 15 Day » 7500 Likes", "coins": 240, "days": 15, "active": True, "color": "blue"},
+                "500p4": {"id": "500p4", "name": "🔥 500 Coins — 30 Day » 15000 Likes", "coins": 500, "days": 30, "active": True, "color": "blue"},
+                "500p5": {"id": "500p5", "name": "👑 1000 Coins — 60 Day » 30000 Likes", "coins": 1000, "days": 60, "active": True, "color": "blue"}
             },
         },
     },
     "coin_pricing": [
-        {"id": "p50", "amount": 50, "coins": 55, "active": True},
-        {"id": "p100", "amount": 100, "coins": 110, "active": True},
-        {"id": "p200", "amount": 200, "coins": 220, "active": True},
-        {"id": "p500", "amount": 500, "coins": 575, "active": True},
-        {"id": "p1000", "amount": 1000, "coins": 1200, "active": True},
+        {"id": "p50", "amount": 50, "coins": 55, "active": True, "color": "blue"},
+        {"id": "p100", "amount": 100, "coins": 110, "active": True, "color": "blue"},
+        {"id": "p200", "amount": 200, "coins": 220, "active": True, "color": "blue"},
+        {"id": "p500", "amount": 500, "coins": 575, "active": True, "color": "blue"},
+        {"id": "p1000", "amount": 1000, "coins": 1200, "active": True, "color": "blue"},
     ],
 }
 
@@ -204,6 +204,7 @@ def normalize_catalog_config():
                         "coins": coins(item.get("coins", 0)),
                         "days": int(item.get("days", 1)),
                         "active": True,
+                        "color": "blue",
                     }
                 },
             }
@@ -247,15 +248,17 @@ def normalize_catalog_config():
             except (TypeError, ValueError):
                 pkg["days"] = 1
             pkg.setdefault("active", True)
+            c = str(pkg.get("color", "blue")).lower()
+            pkg["color"] = c if c in ("blue", "green", "red") else "blue"
 
     pricing = cfg.get("coin_pricing")
     if not isinstance(pricing, list) or not pricing:
         cfg["coin_pricing"] = [
-            {"id": "p50", "amount": 50, "coins": 55, "active": True},
-            {"id": "p100", "amount": 100, "coins": 110, "active": True},
-            {"id": "p200", "amount": 200, "coins": 220, "active": True},
-            {"id": "p500", "amount": 500, "coins": 575, "active": True},
-            {"id": "p1000", "amount": 1000, "coins": 1200, "active": True},
+            {"id": "p50", "amount": 50, "coins": 55, "active": True, "color": "blue"},
+            {"id": "p100", "amount": 100, "coins": 110, "active": True, "color": "blue"},
+            {"id": "p200", "amount": 200, "coins": 220, "active": True, "color": "blue"},
+            {"id": "p500", "amount": 500, "coins": 575, "active": True, "color": "blue"},
+            {"id": "p1000", "amount": 1000, "coins": 1200, "active": True, "color": "blue"},
         ]
     for item in cfg["coin_pricing"]:
         item.setdefault("id", uuid.uuid4().hex[:8])
@@ -263,19 +266,23 @@ def normalize_catalog_config():
         except (TypeError, ValueError): item["amount"] = 0
         item["coins"] = coins(item.get("coins", 0))
         item.setdefault("active", True)
+        item["color"] = str(item.get("color", "blue")).lower() if str(item.get("color", "blue")).lower() in ("blue", "green", "red") else "blue"
 
 
 def InlineKeyboardButton(text, *args, **kwargs):
     """Styled inline buttons, compatible with PTB 22.5 / Python 3.9.
 
-    PTB 22.7 added a dedicated ``style=`` constructor argument, but this
-    hosting environment uses Python 3.9 and therefore can install only up to
-    PTB 22.5. PTB 22.5 already supports ``api_kwargs`` and includes those
-    fields in the outgoing Bot API JSON, so we pass the Bot API ``style``
-    field through ``api_kwargs`` instead.
-    The main 7-button ReplyKeyboard remains unchanged.
+    Use button_color="blue" / "green" / "red" for admin-configured buttons.
+    Existing buttons without an explicit color keep the automatic semantic colors.
     """
-    if "style" not in kwargs and "api_kwargs" not in kwargs:
+    button_color = kwargs.pop("button_color", None)
+    if button_color is not None:
+        c = str(button_color).lower()
+        if c not in ("blue", "green", "red"):
+            c = "blue"
+        existing = kwargs.get("api_kwargs") or {}
+        kwargs["api_kwargs"] = {**existing, "style": c}
+    elif "style" not in kwargs and "api_kwargs" not in kwargs:
         low = str(text).lower()
         if any(x in low for x in ("❌", "delete", "reject", "remove", "danger", "inactive")):
             button_style = "danger"
@@ -376,7 +383,7 @@ def find_package(plan, package_id):
 
 def package_kb():
     plans = get_plans()
-    rows = [[InlineKeyboardButton(str(p.get("name", "Plan")), callback_data=f"auto_plan_{p['id']}")] for p in plans]
+    rows = [[InlineKeyboardButton(str(p.get("name", "Plan")), callback_data=f"auto_plan_{p['id']}", button_color=p.get("color", "blue"))] for p in plans]
     rows.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
     return InlineKeyboardMarkup(rows)
 
@@ -385,7 +392,7 @@ def plan_packages_kb(plan):
     rows = []
     for pkg in plan.get("packages", {}).values():
         if pkg.get("active", True):
-            rows.append([InlineKeyboardButton(str(pkg.get("name", "Package")), callback_data=f"auto_pkg_{plan['id']}_{pkg['id']}")])
+            rows.append([InlineKeyboardButton(str(pkg.get("name", "Package")), callback_data=f"auto_pkg_{plan['id']}_{pkg['id']}", button_color=pkg.get("color", "blue"))])
     rows.append([InlineKeyboardButton("⬅️ Back", callback_data="menu_buy_auto")])
     rows.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
     return InlineKeyboardMarkup(rows)
@@ -414,7 +421,8 @@ def payment_packages_kb():
         if item.get("active", True):
             rows.append([InlineKeyboardButton(
                 f"₹{item['amount']} → {fmt_coins(item['coins'])} coins",
-                callback_data=f"coin_pkg_{item['id']}"
+                callback_data=f"coin_pkg_{item['id']}",
+                button_color=item.get("color", "blue")
             )])
     rows.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
     return InlineKeyboardMarkup(rows)
@@ -1488,10 +1496,18 @@ async def admin_callback(q, context, data):
         toggle="🔴 Make Inactive" if pkg.get("active",True) else "🟢 Make Active"
         await edit_or_reply(q,f"📦 <b>{escape(str(pkg.get('name','Package')))}</b>\n\nStatus: <b>{status}</b>\nCoins: <b>{fmt_coins(pkg.get('coins',0))}</b>\nDays: <b>{int(pkg.get('days',1))}</b>",InlineKeyboardMarkup([
             [InlineKeyboardButton("✏️ Edit Name",callback_data=f"admin_pkg_edit_name_{pid}_{pkgid}")],
+            [InlineKeyboardButton("🎨 Edit Color",callback_data=f"admin_pkg_edit_color_{pid}_{pkgid}")],
             [InlineKeyboardButton("🪙 Edit Coins",callback_data=f"admin_pkg_edit_coins_{pid}_{pkgid}"),InlineKeyboardButton("📅 Edit Days",callback_data=f"admin_pkg_edit_days_{pid}_{pkgid}")],
             [InlineKeyboardButton(toggle,callback_data=f"admin_pkg_status_{pid}_{pkgid}"),InlineKeyboardButton("🗑 Delete",callback_data=f"admin_pkg_delete_{pid}_{pkgid}")],
             [InlineKeyboardButton("⬅️ Back",callback_data=f"admin_plan_packages_{pid}")],
         ])); return
+
+    if data.startswith("admin_pkg_edit_color_"):
+        raw=data[len("admin_pkg_edit_color_"): ]
+        try: pid,pkgid=raw.split("_",1)
+        except ValueError: await q.answer("Package not found.",show_alert=True); return
+        context.user_data.update({"flow":"admin_pkg_edit_color","admin_plan_id":pid,"admin_package_id":pkgid})
+        await edit_or_reply(q,"🎨 Send button color: <code>blue</code>, <code>green</code> or <code>red</code>",admin_back_kb()); return
 
     for prefix, flow_name, prompt in [
         ("admin_pkg_edit_name_","admin_pkg_edit_name","✏️ Send the new package button name:"),
@@ -1544,9 +1560,15 @@ async def admin_callback(q, context, data):
         toggle="🔴 Make Inactive" if item.get("active",True) else "🟢 Make Active"
         await edit_or_reply(q,f"💰 <b>₹{item.get('amount',0)} → {fmt_coins(item.get('coins',0))} coins</b>\n\nStatus: <b>{status}</b>",InlineKeyboardMarkup([
             [InlineKeyboardButton("✏️ Edit ₹ Amount",callback_data=f"admin_price_edit_amount_{pid}"),InlineKeyboardButton("🪙 Edit Coins",callback_data=f"admin_price_edit_coins_{pid}")],
+            [InlineKeyboardButton("🎨 Edit Color",callback_data=f"admin_price_edit_color_{pid}")],
             [InlineKeyboardButton(toggle,callback_data=f"admin_price_status_{pid}"),InlineKeyboardButton("🗑 Delete",callback_data=f"admin_price_delete_{pid}")],
             [InlineKeyboardButton("⬅️ Back",callback_data="admin_manage_pricing")],
         ])); return
+
+    if data.startswith("admin_price_edit_color_"):
+        pid=data[len("admin_price_edit_color_"):]
+        context.user_data.update({"flow":"admin_price_edit_color","admin_price_id":pid})
+        await edit_or_reply(q,"🎨 Send button color: <code>blue</code>, <code>green</code> or <code>red</code>",admin_back_kb()); return
 
     for prefix, flow_name, prompt in [
         ("admin_price_edit_amount_","admin_price_edit_amount","✏️ Send the new ₹ amount:"),
@@ -1680,19 +1702,21 @@ async def handle_admin_text(update, context, text):
         await update.message.reply_text("✅ Plan name updated.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back",callback_data=f"admin_plan_view_{pid}")]])); return
 
     if flow == "admin_pkg_add":
-        parts=[x.strip() for x in text.split("|",2)]
-        if len(parts)!=3: await update.message.reply_text("Use: Button Name | Coins | Days"); return
+        parts=[x.strip() for x in text.split("|",3)]
+        if len(parts)!=4: await update.message.reply_text("Use: Button Name | Coins | Days | Color"); return
         try: price=coins(parts[1]); days=int(parts[2])
         except ValueError: await update.message.reply_text("Coins must be a number and Days must be a whole number."); return
+        color=parts[3].lower()
+        if color not in ("blue","green","red"): await update.message.reply_text("Color must be blue, green or red."); return
         if price<0 or days<1: await update.message.reply_text("Coins must be >= 0 and Days must be >= 1."); return
         pid=context.user_data.get("admin_plan_id"); plan=find_plan(pid)
         if not plan: context.user_data.clear(); await update.message.reply_text("Plan not found."); return
         pkgid=uuid.uuid4().hex[:8]
-        plan.setdefault("packages",{})[pkgid]={"id":pkgid,"name":parts[0],"coins":price,"days":days,"active":True}
+        plan.setdefault("packages",{})[pkgid]={"id":pkgid,"name":parts[0],"coins":price,"days":days,"active":True,"color":color}
         save_db(); context.user_data.clear()
         await update.message.reply_text("✅ Package added.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Packages",callback_data=f"admin_plan_packages_{pid}")]])); return
 
-    if flow in ("admin_pkg_edit_name","admin_pkg_edit_coins","admin_pkg_edit_days"):
+    if flow in ("admin_pkg_edit_name","admin_pkg_edit_coins","admin_pkg_edit_days","admin_pkg_edit_color"):
         pid=context.user_data.get("admin_plan_id"); pkgid=context.user_data.get("admin_package_id"); pkg=find_package(find_plan(pid),pkgid)
         if not pkg: context.user_data.clear(); await update.message.reply_text("Package not found."); return
         if flow=="admin_pkg_edit_name":
@@ -1701,32 +1725,42 @@ async def handle_admin_text(update, context, text):
         elif flow=="admin_pkg_edit_coins":
             try: pkg["coins"]=coins(text)
             except ValueError: await update.message.reply_text("Enter a valid coin amount."); return
-        else:
+        elif flow=="admin_pkg_edit_days":
             try: pkg["days"]=int(text)
             except ValueError: await update.message.reply_text("Enter a whole number of days."); return
             if pkg["days"]<1: await update.message.reply_text("Days must be at least 1."); return
+        else:
+            c=text.strip().lower()
+            if c not in ("blue","green","red"): await update.message.reply_text("Color must be blue, green or red."); return
+            pkg["color"]=c
         save_db(); context.user_data.clear()
         await update.message.reply_text("✅ Package updated.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Package",callback_data=f"admin_pkg_view_{pid}_{pkgid}")]])); return
 
     if flow == "admin_price_add":
-        parts=[x.strip().replace("₹","") for x in text.split("|",1)]
-        if len(parts)!=2: await update.message.reply_text("Use: ₹ Amount | Coins"); return
+        parts=[x.strip().replace("₹","") for x in text.split("|",2)]
+        if len(parts)!=3: await update.message.reply_text("Use: ₹ Amount | Coins | Color"); return
         try: amount=int(parts[0]); coin_value=coins(parts[1])
         except ValueError: await update.message.reply_text("Amount and coins must be numeric."); return
+        color=parts[2].lower()
+        if color not in ("blue","green","red"): await update.message.reply_text("Color must be blue, green or red."); return
         if amount<=0 or coin_value<0: await update.message.reply_text("Amount must be > 0 and coins must be >= 0."); return
-        db["config"].setdefault("coin_pricing",[]).append({"id":uuid.uuid4().hex[:8],"amount":amount,"coins":coin_value,"active":True})
+        db["config"].setdefault("coin_pricing",[]).append({"id":uuid.uuid4().hex[:8],"amount":amount,"coins":coin_value,"active":True,"color":color})
         save_db(); context.user_data.clear()
         await update.message.reply_text("✅ Pricing added.",reply_markup=admin_back_kb()); return
 
-    if flow in ("admin_price_edit_amount","admin_price_edit_coins"):
+    if flow in ("admin_price_edit_amount","admin_price_edit_coins","admin_price_edit_color"):
         pid=context.user_data.get("admin_price_id"); item=next((x for x in db["config"].get("coin_pricing",[]) if str(x.get("id"))==pid),None)
         if not item: context.user_data.clear(); await update.message.reply_text("Pricing not found."); return
         try:
             if flow=="admin_price_edit_amount":
                 item["amount"]=int(text.replace("₹",""));
                 if item["amount"]<=0: raise ValueError
-            else: item["coins"]=coins(text)
-        except ValueError: await update.message.reply_text("Enter a valid positive amount."); return
+            elif flow=="admin_price_edit_coins": item["coins"]=coins(text)
+            else:
+                c=text.strip().lower()
+                if c not in ("blue","green","red"): raise ValueError
+                item["color"]=c
+        except ValueError: await update.message.reply_text("Enter a valid amount/coins or choose blue, green or red."); return
         save_db(); context.user_data.clear()
         await update.message.reply_text("✅ Pricing updated.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Pricing",callback_data="admin_manage_pricing")]])); return
 
