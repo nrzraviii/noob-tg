@@ -266,15 +266,24 @@ def normalize_catalog_config():
 
 
 def InlineKeyboardButton(text, *args, **kwargs):
-    """Styled inline buttons. Main 7-button reply keyboard remains unchanged."""
-    if "style" not in kwargs:
+    """Styled inline buttons, compatible with PTB 22.5 / Python 3.9.
+
+    PTB 22.7 added a dedicated ``style=`` constructor argument, but this
+    hosting environment uses Python 3.9 and therefore can install only up to
+    PTB 22.5. PTB 22.5 already supports ``api_kwargs`` and includes those
+    fields in the outgoing Bot API JSON, so we pass the Bot API ``style``
+    field through ``api_kwargs`` instead.
+    The main 7-button ReplyKeyboard remains unchanged.
+    """
+    if "style" not in kwargs and "api_kwargs" not in kwargs:
         low = str(text).lower()
         if any(x in low for x in ("❌", "delete", "reject", "remove", "danger", "inactive")):
-            kwargs["style"] = "danger"
+            button_style = "danger"
         elif any(x in low for x in ("✅", "approve", "confirm", "add ", "save", "active")):
-            kwargs["style"] = "success"
+            button_style = "success"
         else:
-            kwargs["style"] = "primary"
+            button_style = "primary"
+        kwargs["api_kwargs"] = {"style": button_style}
     return _TelegramInlineKeyboardButton(text, *args, **kwargs)
 
 
