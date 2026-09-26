@@ -65,6 +65,7 @@ DEFAULT_CONFIG = {
             "id": "220",
             "name": "220 Likes / Day",
             "active": True,
+            "color": "blue",
             "packages": {
                 "220p1": {"id": "220p1", "name": "❤️ 15 Coins — 1 Day » 200 Likes", "coins": 15, "days": 1, "active": True, "color": "blue"},
                 "220p2": {"id": "220p2", "name": "❤️ 90 Coins — 15 Day » 3300 Likes", "coins": 90, "days": 15, "active": True, "color": "blue"},
@@ -78,6 +79,7 @@ DEFAULT_CONFIG = {
             "id": "500",
             "name": "500+ Likes / Day",
             "active": True,
+            "color": "blue",
             "packages": {
                 "500p1": {"id": "500p1", "name": "⚡ 45 Coins — 1 Day » 500 Likes", "coins": 45, "days": 1, "active": True, "color": "blue"},
                 "500p2": {"id": "500p2", "name": "💥 150 Coins — 7 Day » 3500 Likes", "coins": 150, "days": 7, "active": True, "color": "blue"},
@@ -197,6 +199,7 @@ def normalize_catalog_config():
                 "id": key,
                 "name": title,
                 "active": True,
+                "color": "blue",
                 "packages": {
                     f"{key}pkg": {
                         "id": f"{key}pkg",
@@ -235,6 +238,8 @@ def normalize_catalog_config():
         plan["id"] = str(plan.get("id") or pid)
         plan.setdefault("name", str(pid))
         plan.setdefault("active", True)
+        pc = str(plan.get("color", "blue")).lower()
+        plan["color"] = pc if pc in ("blue", "green", "red") else "blue"
         pkgs = plan.get("packages", {})
         if isinstance(pkgs, list):
             pkgs = {str(x.get("id") or uuid.uuid4().hex[:8]): x for x in pkgs}
@@ -270,27 +275,19 @@ def normalize_catalog_config():
 
 
 def InlineKeyboardButton(text, *args, **kwargs):
-    """Styled inline buttons, compatible with PTB 22.5 / Python 3.9.
+    """Inline button helper for PTB 22.5/Python 3.9.
 
-    Use button_color="blue" / "green" / "red" for admin-configured buttons.
-    Existing buttons without an explicit color keep the automatic semantic colors.
+    Only buttons that explicitly pass button_color get Telegram's color style.
+    This is important for compatibility: ordinary buttons remain normal Telegram
+    buttons, while configurable plan/package/pricing buttons can be blue/green/red.
     """
     button_color = kwargs.pop("button_color", None)
     if button_color is not None:
-        c = str(button_color).lower()
+        c = str(button_color).strip().lower()
         if c not in ("blue", "green", "red"):
             c = "blue"
         existing = kwargs.get("api_kwargs") or {}
         kwargs["api_kwargs"] = {**existing, "style": c}
-    elif "style" not in kwargs and "api_kwargs" not in kwargs:
-        low = str(text).lower()
-        if any(x in low for x in ("❌", "delete", "reject", "remove", "danger", "inactive")):
-            button_style = "danger"
-        elif any(x in low for x in ("✅", "approve", "confirm", "add ", "save", "active")):
-            button_style = "success"
-        else:
-            button_style = "primary"
-        kwargs["api_kwargs"] = {"style": button_style}
     return _TelegramInlineKeyboardButton(text, *args, **kwargs)
 
 
@@ -381,20 +378,30 @@ def find_package(plan, package_id):
     return plan.get("packages", {}).get(str(package_id))
 
 
-def package_kb():
-    plans = get_plans()
-    rows = [[InlineKeyboardButton(str(p.get("name", "Plan")), callback_data=f"auto_plan_{p['id']}", button_color=p.get("color", "blue"))] for p in plans]
-    rows.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
+def package_kb(use_colors=True):
+    rows = []
+    for p in get_plans():
+        label = str(p.get("name", "Plan"))
+        if use_colors:
+            btn = InlineKeyboardButton(label, callback_data=f"auto_plan_{p['id']}", button_color=p.get("color", "blue"))
+        else:
+            btn = _TelegramInlineKeyboardButton(label, callback_data=f"auto_plan_{p['id']}")
+        rows.append([btn])
+    rows.append([_TelegramInlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
     return InlineKeyboardMarkup(rows)
 
-
-def plan_packages_kb(plan):
+def plan_packages_kb(plan, use_colors=True):
     rows = []
     for pkg in plan.get("packages", {}).values():
         if pkg.get("active", True):
-            rows.append([InlineKeyboardButton(str(pkg.get("name", "Package")), callback_data=f"auto_pkg_{plan['id']}_{pkg['id']}", button_color=pkg.get("color", "blue"))])
-    rows.append([InlineKeyboardButton("⬅️ Back", callback_data="menu_buy_auto")])
-    rows.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
+            label = str(pkg.get("name", "Package"))
+            if use_colors:
+                btn = InlineKeyboardButton(label, callback_data=f"auto_pkg_{plan['id']}_{pkg['id']}", button_color=pkg.get("color", "blue"))
+            else:
+                btn = _TelegramInlineKeyboardButton(label, callback_data=f"auto_pkg_{plan['id']}_{pkg['id']}")
+            rows.append([btn])
+    rows.append([_TelegramInlineKeyboardButton("⬅️ Back", callback_data="menu_buy_auto")])
+    rows.append([_TelegramInlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
     return InlineKeyboardMarkup(rows)
 
 def region_kb(prefix="auto_region"):
@@ -415,16 +422,17 @@ def summary_kb():
     ])
 
 
-def payment_packages_kb():
+def payment_packages_kb(use_colors=True):
     rows = []
     for item in db["config"].get("coin_pricing", []):
         if item.get("active", True):
-            rows.append([InlineKeyboardButton(
-                f"₹{item['amount']} → {fmt_coins(item['coins'])} coins",
-                callback_data=f"coin_pkg_{item['id']}",
-                button_color=item.get("color", "blue")
-            )])
-    rows.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
+            label = f"₹{item['amount']} → {fmt_coins(item['coins'])} coins"
+            if use_colors:
+                btn = InlineKeyboardButton(label, callback_data=f"coin_pkg_{item['id']}", button_color=item.get("color", "blue"))
+            else:
+                btn = _TelegramInlineKeyboardButton(label, callback_data=f"coin_pkg_{item['id']}")
+            rows.append([btn])
+    rows.append([_TelegramInlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
     return InlineKeyboardMarkup(rows)
 
 def payment_uri(amount):
@@ -661,19 +669,52 @@ async def payment_verification_loop(context, order_id):
         contact_admin_kb(),
     )
 
+async def send_menu_message(message, text, colored_markup, plain_markup):
+    """Send a menu with colored buttons, falling back to normal buttons if the
+    current Telegram/API layer rejects the newer button style field."""
+    try:
+        return await message.reply_text(text, reply_markup=colored_markup, parse_mode="HTML")
+    except Exception as e:
+        print("Colored menu failed; using plain buttons:", repr(e))
+        return await message.reply_text(text, reply_markup=plain_markup, parse_mode="HTML")
+
+
+async def show_menu_from_message(message, kind):
+    if kind == "auto":
+        return await send_menu_message(
+            message,
+            "🛒 <b>Select Autolike Plan</b>\n\nChoose your package type:",
+            package_kb(True),
+            package_kb(False),
+        )
+    return await send_menu_message(
+        message,
+        "💰 <b>Select UPI Package</b>\n\nChoose the amount you want to pay:",
+        payment_packages_kb(True),
+        payment_packages_kb(False),
+    )
+
+
 async def show_buy_auto(query, context):
     context.user_data.clear()
     context.user_data["flow"] = "auto"
-    await edit_or_reply(query,
-        "🛒 <b>Select Autolike Plan</b>\n\nChoose your package type:", package_kb())
+    text = "🛒 <b>Select Autolike Plan</b>\n\nChoose your package type:"
+    try:
+        await query.edit_message_text(text, reply_markup=package_kb(True), parse_mode="HTML")
+    except Exception as e:
+        print("Buy Autolike colored menu failed:", repr(e))
+        await query.message.reply_text(text, reply_markup=package_kb(False), parse_mode="HTML")
 
 
 async def show_buy_coins(query, context):
     context.user_data.clear()
     context.user_data["flow"] = "coins"
-    await edit_or_reply(query,
-        "💰 <b>Select UPI Package</b>\n\nChoose the amount you want to pay:",
-        payment_packages_kb())
+    text = "💰 <b>Select UPI Package</b>\n\nChoose the amount you want to pay:"
+    try:
+        await query.edit_message_text(text, reply_markup=payment_packages_kb(True), parse_mode="HTML")
+    except Exception as e:
+        print("Buy Coins colored menu failed:", repr(e))
+        await query.message.reply_text(text, reply_markup=payment_packages_kb(False), parse_mode="HTML")
 
 
 async def show_balance(query):
@@ -1015,15 +1056,30 @@ async def msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
 
     # Reply-keyboard main menu always has priority over an unfinished flow.
-    if text in MENU_TEXT_TO_CALLBACK:
-        data = MENU_TEXT_TO_CALLBACK[text]
+    # Accept the common singular/plural variants too, so an older deployed
+    # keyboard does not leave Buy buttons apparently unresponsive.
+    menu_aliases = {
+        "🛒 Buy Autolikes": "menu_buy_auto",
+        "🛒 Buy AutoLikes": "menu_buy_auto",
+        "🛒 Buy Auto Like": "menu_buy_auto",
+        "Buy Autolike": "menu_buy_auto",
+        "Buy Autolikes": "menu_buy_auto",
+        "Buy AutoLikes": "menu_buy_auto",
+        "Buy Auto Like": "menu_buy_auto",
+        "💰 Buy Coin": "menu_buy_coins",
+        "💰 Buy Coins": "menu_buy_coins",
+        "Buy Coin": "menu_buy_coins",
+        "Buy Coins": "menu_buy_coins",
+    }
+    normalized_text = re.sub(r"\s+", " ", text).strip().lower()
+    normalized_menu = {re.sub(r"\s+", " ", k).strip().lower(): v for k, v in {**MENU_TEXT_TO_CALLBACK, **menu_aliases}.items()}
+    data = normalized_menu.get(normalized_text)
+    if data:
+
         context.user_data.clear()
         if data == "menu_buy_auto":
             context.user_data["flow"] = "auto"
-            await update.message.reply_text(
-                "🛒 <b>Select Autolike Plan</b>\n\nChoose your package type:",
-                reply_markup=package_kb(), parse_mode="HTML"
-            )
+            await show_menu_from_message(update.message, "auto")
         elif data == "menu_my_auto":
             # Reuse a tiny message-like adapter by directly rendering the list.
             uid = str(update.effective_user.id)
@@ -1041,7 +1097,7 @@ async def msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("🎟 <b>Enter your redeem code</b>", reply_markup=cancel_kb(), parse_mode="HTML")
         elif data == "menu_buy_coins":
             context.user_data["flow"] = "coins"
-            await update.message.reply_text("💰 <b>Select UPI Package</b>\n\nChoose the amount you want to pay:", reply_markup=payment_packages_kb(), parse_mode="HTML")
+            await show_menu_from_message(update.message, "coins")
         elif data == "menu_balance":
             u2 = db["users"].get(str(update.effective_user.id), {})
             await update.message.reply_text(
@@ -1453,7 +1509,7 @@ async def admin_callback(q, context, data):
         toggle="🔴 Make Inactive" if plan.get("active",True) else "🟢 Make Active"
         await edit_or_reply(q,f"🛒 <b>{escape(str(plan.get('name','Plan')))}</b>\n\nStatus: <b>{status}</b>\nPackages: <b>{count}</b>",InlineKeyboardMarkup([
             [InlineKeyboardButton("📦 Manage Packages",callback_data=f"admin_plan_packages_{pid}")],
-            [InlineKeyboardButton("✏️ Edit Name",callback_data=f"admin_plan_edit_name_{pid}")],
+            [InlineKeyboardButton("✏️ Edit Name",callback_data=f"admin_plan_edit_name_{pid}"),InlineKeyboardButton("🎨 Edit Color",callback_data=f"admin_plan_edit_color_{pid}")],
             [InlineKeyboardButton(toggle,callback_data=f"admin_plan_status_{pid}"),InlineKeyboardButton("🗑 Delete",callback_data=f"admin_plan_delete_{pid}")],
             [InlineKeyboardButton("⬅️ Back",callback_data="admin_manage_plans")],
         ])); return
@@ -1469,6 +1525,12 @@ async def admin_callback(q, context, data):
         pid=data[len("admin_plan_delete_"):]
         if pid in db["config"].get("plans",{}): del db["config"]["plans"][pid]; save_db()
         await edit_or_reply(q,"🗑 Plan deleted.",InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Manage Plans",callback_data="admin_manage_plans")]])); return
+
+    if data.startswith("admin_plan_edit_color_"):
+        pid=data[len("admin_plan_edit_color_"):]
+        if not find_plan(pid): await q.answer("Plan not found.",show_alert=True); return
+        context.user_data.update({"flow":"admin_plan_edit_color","admin_plan_id":pid})
+        await edit_or_reply(q,"🎨 Send plan button color: <code>blue</code>, <code>green</code> or <code>red</code>",admin_back_kb()); return
 
     if data.startswith("admin_plan_edit_name_"):
         pid=data[len("admin_plan_edit_name_"):]; context.user_data.update({"flow":"admin_plan_edit_name","admin_plan_id":pid})
@@ -1690,16 +1752,22 @@ async def handle_admin_text(update, context, text):
         name=text.strip()
         if not name: await update.message.reply_text("Plan name cannot be empty."); return
         pid=uuid.uuid4().hex[:8]
-        db["config"]["plans"][pid]={"id":pid,"name":name,"active":True,"packages":{}}
+        db["config"]["plans"][pid]={"id":pid,"name":name,"active":True,"color":"blue","packages":{}}
         save_db(); context.user_data.clear()
         await update.message.reply_text("✅ Plan added.",reply_markup=admin_back_kb()); return
 
-    if flow == "admin_plan_edit_name":
+    if flow in ("admin_plan_edit_name", "admin_plan_edit_color"):
         pid=context.user_data.get("admin_plan_id"); plan=find_plan(pid)
         if not plan: context.user_data.clear(); await update.message.reply_text("Plan not found."); return
-        if not text.strip(): await update.message.reply_text("Plan name cannot be empty."); return
-        plan["name"]=text.strip(); save_db(); context.user_data.clear()
-        await update.message.reply_text("✅ Plan name updated.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back",callback_data=f"admin_plan_view_{pid}")]])); return
+        if flow=="admin_plan_edit_name":
+            if not text.strip(): await update.message.reply_text("Plan name cannot be empty."); return
+            plan["name"]=text.strip()
+        else:
+            c=text.strip().lower()
+            if c not in ("blue","green","red"): await update.message.reply_text("Color must be blue, green or red."); return
+            plan["color"]=c
+        save_db(); context.user_data.clear()
+        await update.message.reply_text("✅ Plan updated.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back",callback_data=f"admin_plan_view_{pid}")]])); return
 
     if flow == "admin_pkg_add":
         parts=[x.strip() for x in text.split("|",3)]
@@ -1858,6 +1926,10 @@ async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔐 Admin Panel", reply_markup=admin_panel_kb())
 
 
+async def bot_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    print("BOT ERROR:", repr(context.error))
+
+
 async def post_init(application):
     global APP
     APP = application
@@ -1889,6 +1961,7 @@ def main():
     if not TOKEN:
         raise RuntimeError("TELEGRAM_TOKEN is not set")
     app = Application.builder().token(TOKEN).post_init(post_init).build()
+    app.add_error_handler(bot_error_handler)
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("admin", cmd_admin))
