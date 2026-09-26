@@ -4,6 +4,7 @@ import os
 import re
 import uuid
 from datetime import datetime, timedelta
+from html import escape
 from pathlib import Path
 from urllib.parse import quote_plus, urlencode
 from io import BytesIO
@@ -19,7 +20,7 @@ from telegram import (
     BotCommand,
     BotCommandScopeChat,
     BotCommandScopeDefault,
-    InlineKeyboardButton,
+    InlineKeyboardButton as _TelegramInlineKeyboardButton,
     InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
@@ -59,10 +60,40 @@ DEFAULT_CONFIG = {
     "referral_reward": float(os.getenv("REFERRAL_REWARD", "0.5")),
     "daily_reminder_hour": 4,
     "daily_reminder_minute": 0,
-    "packages": {
-        "220": {"title": "220 Likes / Day", "coins": 15, "days": 1},
-        "500": {"title": "500+ Likes / Day", "coins": 30, "days": 1},
+    "plans": {
+        "220": {
+            "id": "220",
+            "name": "220 Likes / Day",
+            "active": True,
+            "packages": {
+                "220p1": {"id": "220p1", "name": "❤️ 15 Coins — 1 Day » 200 Likes", "coins": 15, "days": 1, "active": True},
+                "220p2": {"id": "220p2", "name": "❤️ 90 Coins — 15 Day » 3300 Likes", "coins": 90, "days": 15, "active": True},
+                "220p3": {"id": "220p3", "name": "💎 180 Coins — 30 Day » 6600 Likes", "coins": 180, "days": 30, "active": True},
+                "220p4": {"id": "220p4", "name": "👑 350 Coins — 60 Day » 13200 Likes", "coins": 350, "days": 60, "active": True},
+                "220p5": {"id": "220p5", "name": "❤️ 740 Coins — 120 Day » 26400 Likes", "coins": 740, "days": 120, "active": True},
+                "220p6": {"id": "220p6", "name": "❤️ 1400 Coins — 240 Day » 52800 Likes", "coins": 1400, "days": 240, "active": True}
+            },
+        },
+        "500": {
+            "id": "500",
+            "name": "500+ Likes / Day",
+            "active": True,
+            "packages": {
+                "500p1": {"id": "500p1", "name": "⚡ 45 Coins — 1 Day » 500 Likes", "coins": 45, "days": 1, "active": True},
+                "500p2": {"id": "500p2", "name": "💥 150 Coins — 7 Day » 3500 Likes", "coins": 150, "days": 7, "active": True},
+                "500p3": {"id": "500p3", "name": "💥 240 Coins — 15 Day » 7500 Likes", "coins": 240, "days": 15, "active": True},
+                "500p4": {"id": "500p4", "name": "🔥 500 Coins — 30 Day » 15000 Likes", "coins": 500, "days": 30, "active": True},
+                "500p5": {"id": "500p5", "name": "👑 1000 Coins — 60 Day » 30000 Likes", "coins": 1000, "days": 60, "active": True}
+            },
+        },
     },
+    "coin_pricing": [
+        {"id": "p50", "amount": 50, "coins": 55, "active": True},
+        {"id": "p100", "amount": 100, "coins": 110, "active": True},
+        {"id": "p200", "amount": 200, "coins": 220, "active": True},
+        {"id": "p500", "amount": 500, "coins": 575, "active": True},
+        {"id": "p1000", "amount": 1000, "coins": 1200, "active": True},
+    ],
 }
 
 REGIONS = [
@@ -151,6 +182,102 @@ if db.get("config", {}).get("upi_name") == "MANISH SHARMA":
     db["config"]["upi_name"] = "nrzravi"
 
 
+def normalize_catalog_config():
+    """Upgrade old 220/500 package data into the new plan/package structure."""
+    cfg = db.setdefault("config", {})
+
+    plans = cfg.get("plans")
+    if not isinstance(plans, dict) or not plans:
+        plans = {}
+        legacy = cfg.get("packages", {})
+        for key, item in legacy.items():
+            key = str(key)
+            title = str(item.get("title", key))
+            plans[key] = {
+                "id": key,
+                "name": title,
+                "active": True,
+                "packages": {
+                    f"{key}pkg": {
+                        "id": f"{key}pkg",
+                        "name": title,
+                        "coins": coins(item.get("coins", 0)),
+                        "days": int(item.get("days", 1)),
+                        "active": True,
+                    }
+                },
+            }
+        cfg["plans"] = plans
+
+    # Migrate the old fixed 220/500 package settings once if they exist.
+    legacy = cfg.get("packages")
+    if isinstance(legacy, dict) and not cfg.get("_plans_migrated", False):
+        for key, old_item in legacy.items():
+            plan = cfg.get("plans", {}).get(str(key))
+            if not plan:
+                continue
+            pkgs = plan.setdefault("packages", {})
+            first = next(iter(pkgs.values()), None)
+            if first:
+                first["coins"] = coins(old_item.get("coins", first.get("coins", 0)))
+                try: first["days"] = int(old_item.get("days", first.get("days", 1)))
+                except (TypeError, ValueError): pass
+                if old_item.get("title"):
+                    # Keep the old title as the first package button when it was customized.
+                    first["name"] = str(old_item["title"])
+        cfg["_plans_migrated"] = True
+
+    # Normalize plans/packages if a previous version stored them as lists.
+    if isinstance(cfg.get("plans"), list):
+        cfg["plans"] = {str(x.get("id") or uuid.uuid4().hex[:8]): x for x in cfg["plans"]}
+    for pid, plan in list(cfg.get("plans", {}).items()):
+        plan["id"] = str(plan.get("id") or pid)
+        plan.setdefault("name", str(pid))
+        plan.setdefault("active", True)
+        pkgs = plan.get("packages", {})
+        if isinstance(pkgs, list):
+            pkgs = {str(x.get("id") or uuid.uuid4().hex[:8]): x for x in pkgs}
+        plan["packages"] = pkgs if isinstance(pkgs, dict) else {}
+        for pkgid, pkg in list(plan["packages"].items()):
+            pkg["id"] = str(pkg.get("id") or pkgid)
+            pkg.setdefault("name", "AutoLike Package")
+            pkg["coins"] = coins(pkg.get("coins", 0))
+            try:
+                pkg["days"] = int(pkg.get("days", 1))
+            except (TypeError, ValueError):
+                pkg["days"] = 1
+            pkg.setdefault("active", True)
+
+    pricing = cfg.get("coin_pricing")
+    if not isinstance(pricing, list) or not pricing:
+        cfg["coin_pricing"] = [
+            {"id": "p50", "amount": 50, "coins": 55, "active": True},
+            {"id": "p100", "amount": 100, "coins": 110, "active": True},
+            {"id": "p200", "amount": 200, "coins": 220, "active": True},
+            {"id": "p500", "amount": 500, "coins": 575, "active": True},
+            {"id": "p1000", "amount": 1000, "coins": 1200, "active": True},
+        ]
+    for item in cfg["coin_pricing"]:
+        item.setdefault("id", uuid.uuid4().hex[:8])
+        try: item["amount"] = int(item.get("amount", 0))
+        except (TypeError, ValueError): item["amount"] = 0
+        item["coins"] = coins(item.get("coins", 0))
+        item.setdefault("active", True)
+
+
+def InlineKeyboardButton(text, *args, **kwargs):
+    """Styled inline buttons. Main 7-button reply keyboard remains unchanged."""
+    if "style" not in kwargs:
+        low = str(text).lower()
+        if any(x in low for x in ("❌", "delete", "reject", "remove", "danger", "inactive")):
+            kwargs["style"] = "danger"
+        elif any(x in low for x in ("✅", "approve", "confirm", "add ", "save", "active")):
+            kwargs["style"] = "success"
+        else:
+            kwargs["style"] = "primary"
+    return _TelegramInlineKeyboardButton(text, *args, **kwargs)
+
+
 def save_db():
     tmp = DB_FILE.with_suffix(".tmp")
     tmp.write_text(json.dumps(db, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -183,6 +310,10 @@ def coins(v):
 def fmt_coins(v):
     n = coins(v)
     return f"{n:.2f}".rstrip("0").rstrip(".")
+
+
+normalize_catalog_config()
+save_db()
 
 
 def valid_uid(text):
@@ -219,14 +350,36 @@ def cancel_kb(callback="cancel_flow"):
     return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data=callback)]])
 
 
-def package_kb():
-    p = db["config"]["packages"]
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"220 Likes / Day — {fmt_coins(p['220']['coins'])} coins", callback_data="auto_pkg_220")],
-        [InlineKeyboardButton(f"500+ Likes / Day — {fmt_coins(p['500']['coins'])} coins", callback_data="auto_pkg_500")],
-        [InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")],
-    ])
+def get_plans(include_inactive=False):
+    plans = list(db["config"].get("plans", {}).values())
+    return plans if include_inactive else [p for p in plans if p.get("active", True)]
 
+
+def find_plan(plan_id):
+    return db["config"].get("plans", {}).get(str(plan_id))
+
+
+def find_package(plan, package_id):
+    if not plan:
+        return None
+    return plan.get("packages", {}).get(str(package_id))
+
+
+def package_kb():
+    plans = get_plans()
+    rows = [[InlineKeyboardButton(str(p.get("name", "Plan")), callback_data=f"auto_plan_{p['id']}")] for p in plans]
+    rows.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
+    return InlineKeyboardMarkup(rows)
+
+
+def plan_packages_kb(plan):
+    rows = []
+    for pkg in plan.get("packages", {}).values():
+        if pkg.get("active", True):
+            rows.append([InlineKeyboardButton(str(pkg.get("name", "Package")), callback_data=f"auto_pkg_{plan['id']}_{pkg['id']}")])
+    rows.append([InlineKeyboardButton("⬅️ Back", callback_data="menu_buy_auto")])
+    rows.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
+    return InlineKeyboardMarkup(rows)
 
 def region_kb(prefix="auto_region"):
     rows = []
@@ -247,19 +400,15 @@ def summary_kb():
 
 
 def payment_packages_kb():
-    # Admin can edit these through the panel. Defaults are intentionally simple.
-    packages = [
-        ("₹50", 50, 55),
-        ("₹100", 100, 110),
-        ("₹200", 200, 220),
-        ("₹500", 500, 575),
-        ("₹1000", 1000, 1200),
-    ]
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"{label} → {coin} coins", callback_data=f"coin_pkg_{amount}")]
-        for label, amount, coin in packages
-    ] + [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")]])
-
+    rows = []
+    for item in db["config"].get("coin_pricing", []):
+        if item.get("active", True):
+            rows.append([InlineKeyboardButton(
+                f"₹{item['amount']} → {fmt_coins(item['coins'])} coins",
+                callback_data=f"coin_pkg_{item['id']}"
+            )])
+    rows.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")])
+    return InlineKeyboardMarkup(rows)
 
 def payment_uri(amount):
     cfg = db["config"]
@@ -499,8 +648,7 @@ async def show_buy_auto(query, context):
     context.user_data.clear()
     context.user_data["flow"] = "auto"
     await edit_or_reply(query,
-        "🛒 <b>Select Autolike Package</b>\n\n"
-        "Choose your package type:", package_kb())
+        "🛒 <b>Select Autolike Plan</b>\n\nChoose your package type:", package_kb())
 
 
 async def show_buy_coins(query, context):
@@ -646,14 +794,41 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ---------- AutoLike flow ----------
-    if data in ("auto_pkg_220", "auto_pkg_500"):
-        key = "220" if data.endswith("220") else "500"
-        p = db["config"]["packages"][key]
-        context.user_data.update({"flow": "auto", "package": key})
+    if data.startswith("auto_plan_"):
+        plan_id = data[len("auto_plan_"):]
+        plan = find_plan(plan_id)
+        if not plan or not plan.get("active", True):
+            await q.answer("Plan unavailable", show_alert=True); return
+        context.user_data.update({"flow": "auto", "plan_id": plan_id})
         await edit_or_reply(q,
-            f"📦 <b>{p['title']}</b>\n\n"
-            f"Coins: <b>{fmt_coins(p['coins'])}</b>\n"
-            f"Duration: <b>{p['days']} day(s)</b>\n\n"
+            f"📦 <b>{escape(str(plan.get('name','Plan')))}</b>\n\nSelect a package:",
+            plan_packages_kb(plan))
+        return
+
+    # Legacy callback compatibility for old 220/500 buttons.
+    if data in ("auto_pkg_220", "auto_pkg_500"):
+        plan_id = "220" if data.endswith("220") else "500"
+        plan = find_plan(plan_id)
+        if plan:
+            context.user_data.update({"flow": "auto", "plan_id": plan_id})
+            await edit_or_reply(q, f"📦 <b>{escape(str(plan.get('name','Plan')))}</b>\n\nSelect a package:", plan_packages_kb(plan))
+        return
+
+    if data.startswith("auto_pkg_"):
+        raw = data[len("auto_pkg_"):]
+        try:
+            plan_id, pkg_id = raw.split("_", 1)
+        except ValueError:
+            await q.answer("Package unavailable", show_alert=True); return
+        plan = find_plan(plan_id)
+        pkg = find_package(plan, pkg_id)
+        if not plan or not pkg or not plan.get("active", True) or not pkg.get("active", True):
+            await q.answer("Package unavailable", show_alert=True); return
+        context.user_data.update({"flow": "auto", "plan_id": plan_id, "package_id": pkg_id})
+        await edit_or_reply(q,
+            f"📦 <b>{escape(str(pkg.get('name','Package')))}</b>\n\n"
+            f"Coins used: <b>{fmt_coins(pkg.get('coins',0))}</b>\n"
+            f"Duration: <b>{int(pkg.get('days',1))} day(s)</b>\n\n"
             "Select region:", region_kb())
         return
 
@@ -671,9 +846,11 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if context.user_data.get("flow") != "auto_confirm":
             await q.answer("Order session expired. Start again.", show_alert=True); return
         u = user_record(q.from_user)
-        key = context.user_data["package"]
-        p = db["config"]["packages"][key]
-        price = coins(p["coins"])
+        plan = find_plan(context.user_data.get("plan_id"))
+        pkg = find_package(plan, context.user_data.get("package_id"))
+        if not plan or not pkg or not pkg.get("active", True):
+            context.user_data.clear(); await q.answer("Package is no longer available.", show_alert=True); return
+        price = coins(pkg.get("coins", 0))
         if coins(u.get("coins", 0)) < price:
             context.user_data.clear()
             await edit_or_reply(q,
@@ -688,10 +865,12 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "user_id": q.from_user.id,
             "name": q.from_user.full_name,
             "username": q.from_user.username or "",
-            "package": key,
-            "package_title": p["title"],
+            "plan": plan.get("id"),
+            "plan_name": plan.get("name"),
+            "package": pkg.get("id"),
+            "package_title": pkg.get("name"),
             "coins": price,
-            "days": int(p["days"]),
+            "days": int(pkg.get("days", 1)),
             "uid": context.user_data["uid"],
             "region": context.user_data["region"],
             "status": "pending",
@@ -703,7 +882,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         summary = (
             "🧾 <b>Order Submitted Successfully</b>\n\n"
             f"Order ID: <code>{order_id}</code>\n"
-            f"Package: {order['package_title']}\n"
+            f"Plan: <b>{escape(str(order['plan_name']))}</b>\n"
+            f"Package: <b>{escape(str(order['package_title']))}</b>\n"
             f"UID: <code>{order['uid']}</code>\n"
             f"Region: {REGION_NAMES.get(order['region'], order['region'])}\n"
             f"Days: {order['days']}\n"
@@ -715,9 +895,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_admins(context,
             "🛒 <b>New AutoLike Order</b>\n\n"
             f"Order ID: <code>{order_id}</code>\n"
-            f"User: {order['name']} (@{order['username'] or 'no_username'})\n"
+            f"User: {escape(str(order['name']))} (@{escape(order['username'] or 'no_username')})\n"
             f"User ID: <code>{order['user_id']}</code>\n"
-            f"Package: {order['package_title']}\n"
+            f"Plan: {escape(str(order['plan_name']))}\n"
+            f"Package: {escape(str(order['package_title']))}\n"
             f"UID: <code>{order['uid']}</code>\n"
             f"Region: {REGION_NAMES.get(order['region'], order['region'])}\n"
             f"Days: {order['days']}\n"
@@ -727,11 +908,12 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ---------- Coin payment flow ----------
     if data.startswith("coin_pkg_"):
-        amount = int(data.replace("coin_pkg_", ""))
-        mapping = {50: 55, 100: 110, 200: 220, 500: 575, 1000: 1200}
-        coin_amount = mapping.get(amount)
-        if not coin_amount:
-            await q.answer("Package unavailable", show_alert=True); return
+        pricing_id = data[len("coin_pkg_"):]
+        item = next((x for x in db["config"].get("coin_pricing", []) if str(x.get("id")) == pricing_id and x.get("active", True)), None)
+        if not item:
+            await q.answer("Pricing unavailable", show_alert=True); return
+        amount = int(item.get("amount", 0))
+        coin_amount = coins(item.get("coins", 0))
         context.user_data.update({"flow": "coin_payment", "pay_amount": amount, "pay_coins": coin_amount})
         text = payment_text(amount, coin_amount)
         buttons = InlineKeyboardMarkup([
@@ -822,7 +1004,7 @@ async def msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if data == "menu_buy_auto":
             context.user_data["flow"] = "auto"
             await update.message.reply_text(
-                "🛒 <b>Select Autolike Package</b>\n\nChoose your package type:",
+                "🛒 <b>Select Autolike Plan</b>\n\nChoose your package type:",
                 reply_markup=package_kb(), parse_mode="HTML"
             )
         elif data == "menu_my_auto":
@@ -864,16 +1046,20 @@ async def msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         context.user_data["uid"] = text
         context.user_data["flow"] = "auto_confirm"
-        key = context.user_data["package"]
-        p = db["config"]["packages"][key]
+        plan = find_plan(context.user_data.get("plan_id"))
+        pkg = find_package(plan, context.user_data.get("package_id"))
+        if not plan or not pkg or not pkg.get("active", True):
+            context.user_data.clear()
+            await update.message.reply_text("❌ This package is no longer available.", reply_markup=main_kb(update.effective_user.id), parse_mode="HTML")
+            return
         summary = (
             "🧾 <b>Order Summary</b>\n\n"
-            f"Package: <b>{p['title']}</b>\n"
-            f"Likes: <b>{p['title'].split()[0]} / day</b>\n"
-            f"Duration: <b>{p['days']} day(s)</b>\n"
+            f"Plan: <b>{escape(str(plan.get('name','Plan')))}</b>\n"
+            f"Package: <b>{escape(str(pkg.get('name','Package')))}</b>\n"
+            f"Duration: <b>{int(pkg.get('days',1))} day(s)</b>\n"
             f"UID: <code>{text}</code>\n"
             f"Region: <b>{REGION_NAMES.get(context.user_data['region'], context.user_data['region'])}</b>\n"
-            f"Price: <b>{fmt_coins(p['coins'])} coins</b>\n\n"
+            f"Price: <b>{fmt_coins(pkg.get('coins',0))} coins</b>\n\n"
             "Confirm the order below."
         )
         await update.message.reply_text(summary, reply_markup=summary_kb(), parse_mode="HTML")
@@ -1149,39 +1335,22 @@ async def admin_callback(q, context, data):
         await edit_or_reply(q, "🎟 <b>Codes</b>\n\n" + ("\n".join(items) if items else "No codes."), admin_back_kb()); return
 
     if data == "admin_verify":
-        await edit_or_reply(q, "🔗 <b>Verify & Earn</b>\n\nChoose:", InlineKeyboardMarkup([
-            [InlineKeyboardButton("➕ Add Verification Task", callback_data="admin_verify_add")],
-            [InlineKeyboardButton("📋 List Tasks", callback_data="admin_verify_list")],
+        await edit_or_reply(q, "🔗 <b>Verify & Earn</b>\n\nManage verification links.", InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Add Verification Link", callback_data="admin_verify_add")],
+            [InlineKeyboardButton("📋 Manage Verification Links", callback_data="admin_verify_list")],
             [InlineKeyboardButton("⬅️ Admin Panel", callback_data="admin_panel")],
         ])); return
 
     if data == "admin_verify_add":
         context.user_data["flow"] = "admin_verify_add"
-        await edit_or_reply(q, "🔗 Send task as:\n<code>Title | https://short-link | CODE | 0.5</code>", admin_back_kb()); return
-
-    if data == "admin_verify_list":
-        rows = []
-        for t in db["verify_tasks"]:
-            rows.append([InlineKeyboardButton(
-                f"{'🟢' if t.get('active',True) else '🔴'} {t.get('title','Task')}",
-                callback_data=f"admin_verify_toggle_{t.get('id')}"
-            )])
-        rows.append([InlineKeyboardButton("⬅️ Admin Panel", callback_data="admin_panel")])
-        await edit_or_reply(q, "🔗 <b>Verification Tasks</b>\n\nTap a task to toggle active/inactive.", InlineKeyboardMarkup(rows)); return
-
-    if data.startswith("admin_verify_toggle_"):
-        tid = data.rsplit("_",1)[-1]
-        for t in db["verify_tasks"]:
-            if t.get("id") == tid:
-                t["active"] = not t.get("active", True); save_db()
-                break
-        await edit_or_reply(q, "Task status updated.", admin_back_kb()); return
+        await edit_or_reply(q, "🔗 <b>Add Verification Link</b>\n\nSend exactly:\n<code>Name | URL | Details | CODE | Reward</code>", admin_back_kb()); return
 
     if data == "admin_settings":
         await edit_or_reply(q,
             "⚙️ <b>Settings</b>\n\nChoose:", InlineKeyboardMarkup([
                 [InlineKeyboardButton("💳 UPI / Payment Details", callback_data="admin_set_payment")],
-                [InlineKeyboardButton("🛒 Package Prices", callback_data="admin_set_packages")],
+                [InlineKeyboardButton("🛒 Manage Plans", callback_data="admin_manage_plans")],
+                [InlineKeyboardButton("💰 Manage Pricing", callback_data="admin_manage_pricing")],
                 [InlineKeyboardButton("📹 How to Pay Link", callback_data="admin_set_howto")],
                 [InlineKeyboardButton("👤 Admin Contact", callback_data="admin_set_contact")],
                 [InlineKeyboardButton("⬅️ Admin Panel", callback_data="admin_panel")],
@@ -1191,9 +1360,201 @@ async def admin_callback(q, context, data):
         context.user_data["flow"] = "admin_payment_settings"
         await edit_or_reply(q, "💳 Send payment details as:\n<code>UPI_ID | NAME | QR_FILE_ID(optional)</code>", admin_back_kb()); return
 
-    if data == "admin_set_packages":
-        context.user_data["flow"] = "admin_package_settings"
-        await edit_or_reply(q, "🛒 Send package settings as:\n<code>220 coins=15 days=1 | 500 coins=30 days=1</code>", admin_back_kb()); return
+    # ---------- Verification task management ----------
+    if data == "admin_verify_list":
+        rows = []
+        for t in db["verify_tasks"]:
+            status = "🟢" if t.get("active", True) else "🔴"
+            rows.append([InlineKeyboardButton(f"{status} {str(t.get('title','Verification'))}", callback_data=f"admin_verify_view_{t.get('id')}")])
+        rows.append([InlineKeyboardButton("➕ Add Verification Link", callback_data="admin_verify_add")])
+        rows.append([InlineKeyboardButton("⬅️ Verify & Earn", callback_data="admin_verify")])
+        await edit_or_reply(q, "🔗 <b>Verification Links</b>\n\nTap a link to manage its name, URL, details, code, reward and status.", InlineKeyboardMarkup(rows)); return
+
+    if data.startswith("admin_verify_view_"):
+        tid = data[len("admin_verify_view_"):]
+        task = next((t for t in db["verify_tasks"] if str(t.get("id")) == tid), None)
+        if not task: await q.answer("Task not found.", show_alert=True); return
+        status = "🟢 Active" if task.get("active", True) else "🔴 Inactive"
+        details = task.get("details") or "No details set."
+        text = (f"🔗 <b>{escape(str(task.get('title','Verification')))}</b>\n\n"
+                f"Status: <b>{status}</b>\n"
+                f"Link: <code>{escape(str(task.get('url','')))}</code>\n"
+                f"Details: {escape(str(details))}\n"
+                f"Code: <code>{escape(str(task.get('code','')))}</code>\n"
+                f"Reward: <b>{fmt_coins(task.get('reward',0))} coins</b>")
+        toggle = "🔴 Make Inactive" if task.get("active", True) else "🟢 Make Active"
+        await edit_or_reply(q, text, InlineKeyboardMarkup([
+            [InlineKeyboardButton("✏️ Edit Name", callback_data=f"admin_verify_edit_name_{tid}"), InlineKeyboardButton("🔗 Edit Link", callback_data=f"admin_verify_edit_url_{tid}")],
+            [InlineKeyboardButton("📝 Edit Details", callback_data=f"admin_verify_edit_details_{tid}"), InlineKeyboardButton("🔑 Edit Code", callback_data=f"admin_verify_edit_code_{tid}")],
+            [InlineKeyboardButton("🪙 Edit Reward", callback_data=f"admin_verify_edit_reward_{tid}")],
+            [InlineKeyboardButton(toggle, callback_data=f"admin_verify_status_{tid}"), InlineKeyboardButton("🗑 Delete", callback_data=f"admin_verify_delete_{tid}")],
+            [InlineKeyboardButton("⬅️ Back", callback_data="admin_verify_list")],
+        ])); return
+
+    if data.startswith("admin_verify_status_"):
+        tid=data[len("admin_verify_status_"):]
+        task=next((t for t in db["verify_tasks"] if str(t.get("id"))==tid),None)
+        if task:
+            task["active"]=not task.get("active",True); save_db()
+            await edit_or_reply(q,"✅ Verification link status updated.",InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back",callback_data=f"admin_verify_view_{tid}")]]))
+        return
+
+    if data.startswith("admin_verify_delete_"):
+        tid=data[len("admin_verify_delete_"):]
+        db["verify_tasks"]=[t for t in db["verify_tasks"] if str(t.get("id"))!=tid]; save_db()
+        await edit_or_reply(q,"🗑 Verification link deleted.",InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Verification Links",callback_data="admin_verify_list")]])); return
+
+    for prefix, field, prompt, flow_name in [
+        ("admin_verify_edit_name_","title","✏️ Send the new verification link name:","admin_verify_edit_name"),
+        ("admin_verify_edit_url_","url","🔗 Send the new verification URL:","admin_verify_edit_url"),
+        ("admin_verify_edit_details_","details","📝 Send the new verification details:","admin_verify_edit_details"),
+        ("admin_verify_edit_code_","code","🔑 Send the new verification code:","admin_verify_edit_code"),
+        ("admin_verify_edit_reward_","reward","🪙 Send the reward in coins:","admin_verify_edit_reward"),
+    ]:
+        if data.startswith(prefix):
+            tid=data[len(prefix):]
+            context.user_data.update({"flow":flow_name,"admin_verify_id":tid})
+            await edit_or_reply(q,prompt,admin_back_kb()); return
+
+    # ---------- Plan/package management ----------
+    if data == "admin_manage_plans":
+        rows=[[InlineKeyboardButton(f"{'🟢' if p.get('active',True) else '🔴'} {str(p.get('name','Plan'))}", callback_data=f"admin_plan_view_{p['id']}")] for p in get_plans(True)]
+        rows.append([InlineKeyboardButton("➕ Add Plan", callback_data="admin_plan_add")])
+        rows.append([InlineKeyboardButton("⬅️ Settings", callback_data="admin_settings")])
+        await edit_or_reply(q,"🛒 <b>Manage Plans</b>\n\nSelect a plan to manage it, or add a new plan.",InlineKeyboardMarkup(rows)); return
+
+    if data == "admin_plan_add":
+        context.user_data["flow"]="admin_plan_add"
+        await edit_or_reply(q,"➕ <b>Add Plan</b>\n\nSend the plan name. This exact name will be shown on the plan button to users.",admin_back_kb()); return
+
+    if data.startswith("admin_plan_view_"):
+        pid=data[len("admin_plan_view_"):]
+        plan=find_plan(pid)
+        if not plan: await q.answer("Plan not found.",show_alert=True); return
+        status="🟢 Active" if plan.get("active",True) else "🔴 Inactive"
+        count=len(plan.get("packages",{}))
+        toggle="🔴 Make Inactive" if plan.get("active",True) else "🟢 Make Active"
+        await edit_or_reply(q,f"🛒 <b>{escape(str(plan.get('name','Plan')))}</b>\n\nStatus: <b>{status}</b>\nPackages: <b>{count}</b>",InlineKeyboardMarkup([
+            [InlineKeyboardButton("📦 Manage Packages",callback_data=f"admin_plan_packages_{pid}")],
+            [InlineKeyboardButton("✏️ Edit Name",callback_data=f"admin_plan_edit_name_{pid}")],
+            [InlineKeyboardButton(toggle,callback_data=f"admin_plan_status_{pid}"),InlineKeyboardButton("🗑 Delete",callback_data=f"admin_plan_delete_{pid}")],
+            [InlineKeyboardButton("⬅️ Back",callback_data="admin_manage_plans")],
+        ])); return
+
+    if data.startswith("admin_plan_status_"):
+        pid=data[len("admin_plan_status_"):]; plan=find_plan(pid)
+        if plan:
+            plan["active"]=not plan.get("active",True); save_db()
+            await edit_or_reply(q,"✅ Plan status updated.",InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back",callback_data=f"admin_plan_view_{pid}")]]))
+        return
+
+    if data.startswith("admin_plan_delete_"):
+        pid=data[len("admin_plan_delete_"):]
+        if pid in db["config"].get("plans",{}): del db["config"]["plans"][pid]; save_db()
+        await edit_or_reply(q,"🗑 Plan deleted.",InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Manage Plans",callback_data="admin_manage_plans")]])); return
+
+    if data.startswith("admin_plan_edit_name_"):
+        pid=data[len("admin_plan_edit_name_"):]; context.user_data.update({"flow":"admin_plan_edit_name","admin_plan_id":pid})
+        await edit_or_reply(q,"✏️ Send the new plan name:",admin_back_kb()); return
+
+    if data.startswith("admin_plan_packages_"):
+        pid=data[len("admin_plan_packages_"):]; plan=find_plan(pid)
+        if not plan: await q.answer("Plan not found.",show_alert=True); return
+        rows=[[InlineKeyboardButton(f"{'🟢' if pkg.get('active',True) else '🔴'} {str(pkg.get('name','Package'))}",callback_data=f"admin_pkg_view_{pid}_{pkg['id']}")] for pkg in plan.get("packages",{}).values()]
+        rows.append([InlineKeyboardButton("➕ Add Package",callback_data=f"admin_pkg_add_{pid}")])
+        rows.append([InlineKeyboardButton("⬅️ Back",callback_data=f"admin_plan_view_{pid}")])
+        await edit_or_reply(q,f"📦 <b>Packages — {escape(str(plan.get('name','Plan')))}</b>\n\nSelect a package to edit, activate/deactivate or delete it.",InlineKeyboardMarkup(rows)); return
+
+    if data.startswith("admin_pkg_add_"):
+        pid=data[len("admin_pkg_add_"):]; context.user_data.update({"flow":"admin_pkg_add","admin_plan_id":pid})
+        await edit_or_reply(q,"➕ <b>Add Package</b>\n\nSend exactly:\n<code>Button Name | Coins | Days</code>\n\nThe Button Name is displayed exactly on the user's package button. Coins and Days control the actual purchase/expiry values.",admin_back_kb()); return
+
+    if data.startswith("admin_pkg_view_"):
+        raw=data[len("admin_pkg_view_"):]
+        try: pid,pkgid=raw.split("_",1)
+        except ValueError: await q.answer("Package not found.",show_alert=True); return
+        plan=find_plan(pid); pkg=find_package(plan,pkgid)
+        if not pkg: await q.answer("Package not found.",show_alert=True); return
+        status="🟢 Active" if pkg.get("active",True) else "🔴 Inactive"
+        toggle="🔴 Make Inactive" if pkg.get("active",True) else "🟢 Make Active"
+        await edit_or_reply(q,f"📦 <b>{escape(str(pkg.get('name','Package')))}</b>\n\nStatus: <b>{status}</b>\nCoins: <b>{fmt_coins(pkg.get('coins',0))}</b>\nDays: <b>{int(pkg.get('days',1))}</b>",InlineKeyboardMarkup([
+            [InlineKeyboardButton("✏️ Edit Name",callback_data=f"admin_pkg_edit_name_{pid}_{pkgid}")],
+            [InlineKeyboardButton("🪙 Edit Coins",callback_data=f"admin_pkg_edit_coins_{pid}_{pkgid}"),InlineKeyboardButton("📅 Edit Days",callback_data=f"admin_pkg_edit_days_{pid}_{pkgid}")],
+            [InlineKeyboardButton(toggle,callback_data=f"admin_pkg_status_{pid}_{pkgid}"),InlineKeyboardButton("🗑 Delete",callback_data=f"admin_pkg_delete_{pid}_{pkgid}")],
+            [InlineKeyboardButton("⬅️ Back",callback_data=f"admin_plan_packages_{pid}")],
+        ])); return
+
+    for prefix, flow_name, prompt in [
+        ("admin_pkg_edit_name_","admin_pkg_edit_name","✏️ Send the new package button name:"),
+        ("admin_pkg_edit_coins_","admin_pkg_edit_coins","🪙 Send the new coin cost:"),
+        ("admin_pkg_edit_days_","admin_pkg_edit_days","📅 Send the new duration in days:"),
+    ]:
+        if data.startswith(prefix):
+            raw=data[len(prefix):]
+            try: pid,pkgid=raw.split("_",1)
+            except ValueError: await q.answer("Package not found.",show_alert=True); return
+            context.user_data.update({"flow":flow_name,"admin_plan_id":pid,"admin_package_id":pkgid})
+            await edit_or_reply(q,prompt,admin_back_kb()); return
+
+    if data.startswith("admin_pkg_status_"):
+        raw=data[len("admin_pkg_status_"):]
+        try: pid,pkgid=raw.split("_",1)
+        except ValueError: return
+        pkg=find_package(find_plan(pid),pkgid)
+        if pkg:
+            pkg["active"]=not pkg.get("active",True); save_db()
+            await edit_or_reply(q,"✅ Package status updated.",InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back",callback_data=f"admin_pkg_view_{pid}_{pkgid}")]]))
+        return
+
+    if data.startswith("admin_pkg_delete_"):
+        raw=data[len("admin_pkg_delete_"):];
+        try: pid,pkgid=raw.split("_",1)
+        except ValueError: return
+        plan=find_plan(pid)
+        if plan and pkgid in plan.get("packages",{}): del plan["packages"][pkgid]; save_db()
+        await edit_or_reply(q,"🗑 Package deleted.",InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Packages",callback_data=f"admin_plan_packages_{pid}")]])); return
+
+    # ---------- Coin pricing management ----------
+    if data == "admin_manage_pricing":
+        rows=[]
+        for item in db["config"].get("coin_pricing",[]):
+            status="🟢" if item.get("active",True) else "🔴"
+            rows.append([InlineKeyboardButton(f"{status} ₹{item.get('amount',0)} → {fmt_coins(item.get('coins',0))} coins",callback_data=f"admin_price_view_{item.get('id')}")])
+        rows.append([InlineKeyboardButton("➕ Add Pricing",callback_data="admin_price_add")])
+        rows.append([InlineKeyboardButton("⬅️ Settings",callback_data="admin_settings")])
+        await edit_or_reply(q,"💰 <b>Manage Pricing</b>\n\nManage the ₹ amount → coins mapping shown in Buy Coins.",InlineKeyboardMarkup(rows)); return
+
+    if data == "admin_price_add":
+        context.user_data["flow"]="admin_price_add"
+        await edit_or_reply(q,"➕ <b>Add Pricing</b>\n\nSend exactly:\n<code>₹ Amount | Coins</code>",admin_back_kb()); return
+
+    if data.startswith("admin_price_view_"):
+        pid=data[len("admin_price_view_"):]; item=next((x for x in db["config"].get("coin_pricing",[]) if str(x.get("id"))==pid),None)
+        if not item: await q.answer("Pricing not found.",show_alert=True); return
+        status="🟢 Active" if item.get("active",True) else "🔴 Inactive"
+        toggle="🔴 Make Inactive" if item.get("active",True) else "🟢 Make Active"
+        await edit_or_reply(q,f"💰 <b>₹{item.get('amount',0)} → {fmt_coins(item.get('coins',0))} coins</b>\n\nStatus: <b>{status}</b>",InlineKeyboardMarkup([
+            [InlineKeyboardButton("✏️ Edit ₹ Amount",callback_data=f"admin_price_edit_amount_{pid}"),InlineKeyboardButton("🪙 Edit Coins",callback_data=f"admin_price_edit_coins_{pid}")],
+            [InlineKeyboardButton(toggle,callback_data=f"admin_price_status_{pid}"),InlineKeyboardButton("🗑 Delete",callback_data=f"admin_price_delete_{pid}")],
+            [InlineKeyboardButton("⬅️ Back",callback_data="admin_manage_pricing")],
+        ])); return
+
+    for prefix, flow_name, prompt in [
+        ("admin_price_edit_amount_","admin_price_edit_amount","✏️ Send the new ₹ amount:"),
+        ("admin_price_edit_coins_","admin_price_edit_coins","🪙 Send the new coin amount:"),
+    ]:
+        if data.startswith(prefix):
+            pid=data[len(prefix):]; context.user_data.update({"flow":flow_name,"admin_price_id":pid})
+            await edit_or_reply(q,prompt,admin_back_kb()); return
+
+    if data.startswith("admin_price_status_"):
+        pid=data[len("admin_price_status_"):]; item=next((x for x in db["config"].get("coin_pricing",[]) if str(x.get("id"))==pid),None)
+        if item: item["active"]=not item.get("active",True); save_db(); await edit_or_reply(q,"✅ Pricing status updated.",InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back",callback_data=f"admin_price_view_{pid}")]]))
+        return
+
+    if data.startswith("admin_price_delete_"):
+        pid=data[len("admin_price_delete_"):]; db["config"]["coin_pricing"]=[x for x in db["config"].get("coin_pricing",[]) if str(x.get("id"))!=pid]; save_db()
+        await edit_or_reply(q,"🗑 Pricing deleted.",InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Pricing",callback_data="admin_manage_pricing")]])); return
 
     if data == "admin_set_howto":
         context.user_data["flow"] = "admin_howto"
@@ -1294,6 +1655,90 @@ async def handle_admin_text(update, context, text):
         await notify_user(context, o["user_id"], f"✅ Admin updated your balance.\n\nAdded: <b>{fmt_coins(amount)} coins</b>\nBalance: <b>{fmt_coins(u['coins'])}</b>", back_menu_kb())
         await update.message.reply_text("✅ Balance updated and payment marked approved.", reply_markup=admin_back_kb()); return
 
+    if flow == "admin_plan_add":
+        name=text.strip()
+        if not name: await update.message.reply_text("Plan name cannot be empty."); return
+        pid=uuid.uuid4().hex[:8]
+        db["config"]["plans"][pid]={"id":pid,"name":name,"active":True,"packages":{}}
+        save_db(); context.user_data.clear()
+        await update.message.reply_text("✅ Plan added.",reply_markup=admin_back_kb()); return
+
+    if flow == "admin_plan_edit_name":
+        pid=context.user_data.get("admin_plan_id"); plan=find_plan(pid)
+        if not plan: context.user_data.clear(); await update.message.reply_text("Plan not found."); return
+        if not text.strip(): await update.message.reply_text("Plan name cannot be empty."); return
+        plan["name"]=text.strip(); save_db(); context.user_data.clear()
+        await update.message.reply_text("✅ Plan name updated.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back",callback_data=f"admin_plan_view_{pid}")]])); return
+
+    if flow == "admin_pkg_add":
+        parts=[x.strip() for x in text.split("|",2)]
+        if len(parts)!=3: await update.message.reply_text("Use: Button Name | Coins | Days"); return
+        try: price=coins(parts[1]); days=int(parts[2])
+        except ValueError: await update.message.reply_text("Coins must be a number and Days must be a whole number."); return
+        if price<0 or days<1: await update.message.reply_text("Coins must be >= 0 and Days must be >= 1."); return
+        pid=context.user_data.get("admin_plan_id"); plan=find_plan(pid)
+        if not plan: context.user_data.clear(); await update.message.reply_text("Plan not found."); return
+        pkgid=uuid.uuid4().hex[:8]
+        plan.setdefault("packages",{})[pkgid]={"id":pkgid,"name":parts[0],"coins":price,"days":days,"active":True}
+        save_db(); context.user_data.clear()
+        await update.message.reply_text("✅ Package added.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Packages",callback_data=f"admin_plan_packages_{pid}")]])); return
+
+    if flow in ("admin_pkg_edit_name","admin_pkg_edit_coins","admin_pkg_edit_days"):
+        pid=context.user_data.get("admin_plan_id"); pkgid=context.user_data.get("admin_package_id"); pkg=find_package(find_plan(pid),pkgid)
+        if not pkg: context.user_data.clear(); await update.message.reply_text("Package not found."); return
+        if flow=="admin_pkg_edit_name":
+            if not text.strip(): await update.message.reply_text("Package name cannot be empty."); return
+            pkg["name"]=text.strip()
+        elif flow=="admin_pkg_edit_coins":
+            try: pkg["coins"]=coins(text)
+            except ValueError: await update.message.reply_text("Enter a valid coin amount."); return
+        else:
+            try: pkg["days"]=int(text)
+            except ValueError: await update.message.reply_text("Enter a whole number of days."); return
+            if pkg["days"]<1: await update.message.reply_text("Days must be at least 1."); return
+        save_db(); context.user_data.clear()
+        await update.message.reply_text("✅ Package updated.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Package",callback_data=f"admin_pkg_view_{pid}_{pkgid}")]])); return
+
+    if flow == "admin_price_add":
+        parts=[x.strip().replace("₹","") for x in text.split("|",1)]
+        if len(parts)!=2: await update.message.reply_text("Use: ₹ Amount | Coins"); return
+        try: amount=int(parts[0]); coin_value=coins(parts[1])
+        except ValueError: await update.message.reply_text("Amount and coins must be numeric."); return
+        if amount<=0 or coin_value<0: await update.message.reply_text("Amount must be > 0 and coins must be >= 0."); return
+        db["config"].setdefault("coin_pricing",[]).append({"id":uuid.uuid4().hex[:8],"amount":amount,"coins":coin_value,"active":True})
+        save_db(); context.user_data.clear()
+        await update.message.reply_text("✅ Pricing added.",reply_markup=admin_back_kb()); return
+
+    if flow in ("admin_price_edit_amount","admin_price_edit_coins"):
+        pid=context.user_data.get("admin_price_id"); item=next((x for x in db["config"].get("coin_pricing",[]) if str(x.get("id"))==pid),None)
+        if not item: context.user_data.clear(); await update.message.reply_text("Pricing not found."); return
+        try:
+            if flow=="admin_price_edit_amount":
+                item["amount"]=int(text.replace("₹",""));
+                if item["amount"]<=0: raise ValueError
+            else: item["coins"]=coins(text)
+        except ValueError: await update.message.reply_text("Enter a valid positive amount."); return
+        save_db(); context.user_data.clear()
+        await update.message.reply_text("✅ Pricing updated.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Pricing",callback_data="admin_manage_pricing")]])); return
+
+    if flow.startswith("admin_verify_edit_"):
+        tid=context.user_data.get("admin_verify_id"); task=next((t for t in db["verify_tasks"] if str(t.get("id"))==tid),None)
+        if not task: context.user_data.clear(); await update.message.reply_text("Verification link not found."); return
+        kind=flow[len("admin_verify_edit_"):]
+        if kind=="name":
+            if not text.strip(): await update.message.reply_text("Name cannot be empty."); return
+            task["title"]=text.strip()
+        elif kind=="url":
+            if not text.startswith(("http://","https://")): await update.message.reply_text("Send a valid http/https URL."); return
+            task["url"]=text.strip()
+        elif kind=="details": task["details"]=text.strip()
+        elif kind=="code": task["code"]=text.strip().upper()
+        elif kind=="reward":
+            try: task["reward"]=coins(text)
+            except ValueError: await update.message.reply_text("Enter a valid reward."); return
+        save_db(); context.user_data.clear()
+        await update.message.reply_text("✅ Verification link updated.",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Verification Link",callback_data=f"admin_verify_view_{tid}")]])); return
+
     if flow == "admin_code_create":
         parts = text.split()
         if len(parts) < 2:
@@ -1307,15 +1752,14 @@ async def handle_admin_text(update, context, text):
         await update.message.reply_text(f"✅ Code <code>{code}</code> created for {fmt_coins(reward)} coins.", parse_mode="HTML", reply_markup=admin_back_kb()); return
 
     if flow == "admin_verify_add":
-        parts = [x.strip() for x in text.split("|")]
-        if len(parts) != 4 or not parts[1].startswith(("http://", "https://")):
-            await update.message.reply_text("Use: Title | https://short-link | CODE | 0.5"); return
-        try: reward = coins(parts[3])
-        except ValueError:
-            await update.message.reply_text("Invalid reward."); return
-        task = {"id": uuid.uuid4().hex[:8], "title": parts[0], "url": parts[1], "code": parts[2].upper(), "reward": reward, "active": True, "created_at": iso_now()}
+        parts=[x.strip() for x in text.split("|",4)]
+        if len(parts)!=5 or not parts[1].startswith(("http://","https://")):
+            await update.message.reply_text("Use: Name | URL | Details | CODE | Reward"); return
+        try: reward=coins(parts[4])
+        except ValueError: await update.message.reply_text("Invalid reward."); return
+        task={"id":uuid.uuid4().hex[:8],"title":parts[0],"url":parts[1],"details":parts[2],"code":parts[3].upper(),"reward":reward,"active":True,"created_at":iso_now()}
         db["verify_tasks"].append(task); save_db(); context.user_data.clear()
-        await update.message.reply_text(f"✅ Verification task added: {parts[0]}", reply_markup=admin_back_kb()); return
+        await update.message.reply_text(f"✅ Verification link added: {escape(parts[0])}",parse_mode="HTML",reply_markup=admin_back_kb()); return
 
     if flow == "admin_payment_settings":
         parts = [x.strip() for x in text.split("|")]
@@ -1325,21 +1769,6 @@ async def handle_admin_text(update, context, text):
         if len(parts) >= 3: db["config"]["payment_qr_file_id"] = parts[2]
         save_db(); context.user_data.clear()
         await update.message.reply_text("✅ Payment settings updated.", reply_markup=admin_back_kb()); return
-
-    if flow == "admin_package_settings":
-        try:
-            # Example: 220 coins=15 days=1 | 500 coins=30 days=1
-            for part in text.split("|"):
-                m = re.fullmatch(r"(220|500)\s+coins\s*=\s*([0-9.]+)\s+days\s*=\s*(\d+)", part.strip(), re.I)
-                if not m: raise ValueError
-                key, price, days = m.group(1), float(m.group(2)), int(m.group(3))
-                db["config"]["packages"][key]["coins"] = price
-                db["config"]["packages"][key]["days"] = days
-            save_db(); context.user_data.clear()
-            await update.message.reply_text("✅ AutoLike package prices updated.", reply_markup=admin_back_kb())
-        except ValueError:
-            await update.message.reply_text("Use: 220 coins=15 days=1 | 500 coins=30 days=1")
-        return
 
     if flow == "admin_howto":
         if not text.startswith(("http://", "https://")):
